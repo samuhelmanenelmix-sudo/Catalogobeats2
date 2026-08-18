@@ -1,0 +1,185 @@
+{
+  "entities": {
+    "Beat": {
+      "title": "Beat",
+      "description": "A musical instrumental beat available in the catalog with audio previews, stems, licensing tiers and metadata.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the beat (e.g., beat-samu-01 or el-subestimado)",
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the beat",
+          "maxLength": 150
+        },
+        "producer": {
+          "type": "string",
+          "description": "Name of the producer/creator",
+          "maxLength": 100
+        },
+        "genre": {
+          "type": "string",
+          "description": "Musical genre",
+          "maxLength": 50
+        },
+        "subgenre": {
+          "type": "string",
+          "description": "Optional subgenre",
+          "maxLength": 50
+        },
+        "bpm": {
+          "type": "number",
+          "description": "Tempo in Beats Per Minute"
+        },
+        "keyScale": {
+          "type": "string",
+          "description": "Musical key scale (e.g. C# Minor)",
+          "maxLength": 30
+        },
+        "mood": {
+          "type": "array",
+          "description": "List of mood tags describing the beat"
+        },
+        "tags": {
+          "type": "array",
+          "description": "List of search hashtags"
+        },
+        "duration": {
+          "type": "string",
+          "description": "Formatted duration string (e.g. 3:20)",
+          "maxLength": 10
+        },
+        "durationSeconds": {
+          "type": "number",
+          "description": "Duration in seconds"
+        },
+        "coverUrl": {
+          "type": "string",
+          "description": "URL or base64 data of the cover artwork image",
+          "maxLength": 3000000
+        },
+        "audioPreviewUrl": {
+          "type": "string",
+          "description": "URL or path of the audio preview stream",
+          "maxLength": 1000
+        },
+        "audioFileName": {
+          "type": "string",
+          "description": "Original file name of uploaded master audio",
+          "maxLength": 200
+        },
+        "stemsFileUrl": {
+          "type": "string",
+          "description": "Optional download URL or path for trackout stems ZIP",
+          "maxLength": 1000
+        },
+        "previewDuration": {
+          "type": "number",
+          "description": "Duration in seconds of the preview snippet"
+        },
+        "isWatermarkedPreview": {
+          "type": "boolean",
+          "description": "Flag indicating if the preview audio has voice tags"
+        },
+        "description": {
+          "type": "string",
+          "description": "Beat description or inspiration details",
+          "maxLength": 2000
+        },
+        "plays": {
+          "type": "number",
+          "description": "Total play count"
+        },
+        "likes": {
+          "type": "number",
+          "description": "Total like count"
+        },
+        "isFeatured": {
+          "type": "boolean",
+          "description": "Flag indicating if the beat is featured on the homepage hero"
+        },
+        "isSoldExclusive": {
+          "type": "boolean",
+          "description": "Flag indicating if the beat has been sold under exclusive rights"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of creation",
+          "maxLength": 50
+        },
+        "paypalLinks": {
+          "type": "object",
+          "description": "Custom PayPal direct payment links per tier"
+        },
+        "tierPrices": {
+          "type": "object",
+          "description": "Price overrides per licensing tier"
+        }
+      },
+      "required": ["id", "title", "producer", "genre", "bpm", "keyScale", "coverUrl", "audioPreviewUrl", "tierPrices", "paypalLinks"]
+    },
+    "PaymentConfig": {
+      "title": "PaymentConfig",
+      "description": "Store payment gateways and producer configuration.",
+      "type": "object",
+      "properties": {
+        "producerName": { "type": "string", "maxLength": 100 },
+        "producerEmail": { "type": "string", "maxLength": 100 },
+        "paypalEmailOrUsername": { "type": "string", "maxLength": 100 },
+        "paypalBaseUrl": { "type": "string", "maxLength": 200 },
+        "enableDirectPaypalLinks": { "type": "boolean" },
+        "enableMercadoPago": { "type": "boolean" },
+        "mercadoPagoAlias": { "type": "string", "maxLength": 100 },
+        "enableBankTransfer": { "type": "boolean" },
+        "bankDetails": { "type": "string", "maxLength": 1000 },
+        "enableWhatsAppCheckout": { "type": "boolean" },
+        "whatsAppNumber": { "type": "string", "maxLength": 30 },
+        "currency": { "type": "string", "maxLength": 10 },
+        "currencySymbol": { "type": "string", "maxLength": 10 }
+      },
+      "required": ["producerName", "producerEmail", "currency", "currencySymbol"]
+    },
+    "PurchasedLicense": {
+      "title": "PurchasedLicense",
+      "description": "Record of a purchased beat license agreement.",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string", "maxLength": 128 },
+        "beatTitle": { "type": "string", "maxLength": 150 },
+        "beatId": { "type": "string", "maxLength": 128 },
+        "producer": { "type": "string", "maxLength": 100 },
+        "producerEmail": { "type": "string", "maxLength": 100 },
+        "buyerName": { "type": "string", "maxLength": 100 },
+        "buyerEmail": { "type": "string", "maxLength": 100 },
+        "artistStageName": { "type": "string", "maxLength": 100 },
+        "tierName": { "type": "string", "maxLength": 50 },
+        "tierKey": { "type": "string", "maxLength": 30 },
+        "amountPaid": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 10 },
+        "paymentMethod": { "type": "string", "maxLength": 50 },
+        "transactionRef": { "type": "string", "maxLength": 128 },
+        "purchaseDate": { "type": "string", "maxLength": 50 },
+        "contractText": { "type": "string", "maxLength": 50000 },
+        "contractHtml": { "type": "string", "maxLength": 100000 }
+      },
+      "required": ["orderId", "beatTitle", "beatId", "buyerName", "buyerEmail", "tierKey", "amountPaid", "purchaseDate"]
+    }
+  },
+  "firestore": {
+    "/beats/{beatId}": {
+      "schema": "Beat",
+      "description": "Collection of instrumental beats in the catalog available for streaming and licensing purchase."
+    },
+    "/settings/{settingId}": {
+      "schema": "PaymentConfig",
+      "description": "Platform settings including payment methods and producer contact details."
+    },
+    "/purchases/{purchaseId}": {
+      "schema": "PurchasedLicense",
+      "description": "Records of completed license sales and purchase contracts."
+    }
+  }
+}

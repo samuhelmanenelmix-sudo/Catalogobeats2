@@ -1,0 +1,8 @@
+{
+  "name": "CATALOGO DE BEATS SAMUEL HELMAN",
+  "description": "Plataforma para publicar catálogos de beats por géneros, detalles de producción, pasarela de pago y enlaces directos de PayPal para venta automatizada de licencias.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

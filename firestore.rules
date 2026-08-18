@@ -1,0 +1,109 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all unmatched paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isProducerAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'samuhelmanenelmix@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Validator for Beat documents
+    function isValidBeat(data) {
+      return data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 150 &&
+             data.producer is string && data.producer.size() > 0 && data.producer.size() <= 100 &&
+             data.genre is string && data.genre.size() > 0 && data.genre.size() <= 50 &&
+             data.bpm is number && data.bpm >= 40 && data.bpm <= 300 &&
+             data.keyScale is string && data.keyScale.size() > 0 && data.keyScale.size() <= 30 &&
+             data.coverUrl is string && data.coverUrl.size() > 0 && data.coverUrl.size() <= 3500000 &&
+             data.audioPreviewUrl is string && data.audioPreviewUrl.size() > 0 && data.audioPreviewUrl.size() <= 2000 &&
+             data.tierPrices is map &&
+             data.paypalLinks is map &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 3000)) &&
+             (!('plays' in data) || data.plays is number) &&
+             (!('likes' in data) || data.likes is number) &&
+             (!('isFeatured' in data) || data.isFeatured is bool) &&
+             (!('isSoldExclusive' in data) || data.isSoldExclusive is bool) &&
+             (!('tags' in data) || (data.tags is list && data.tags.size() <= 30)) &&
+             (!('mood' in data) || (data.mood is list && data.mood.size() <= 20));
+    }
+
+    // Validator for Store Payment & Producer Config
+    function isValidPaymentConfig(data) {
+      return data.producerName is string && data.producerName.size() > 0 && data.producerName.size() <= 100 &&
+             data.producerEmail is string && data.producerEmail.size() > 0 && data.producerEmail.size() <= 100 &&
+             data.currency is string && data.currency.size() > 0 && data.currency.size() <= 10 &&
+             data.currencySymbol is string && data.currencySymbol.size() > 0 && data.currencySymbol.size() <= 10 &&
+             (!('paypalEmailOrUsername' in data) || (data.paypalEmailOrUsername is string && data.paypalEmailOrUsername.size() <= 100)) &&
+             (!('paypalBaseUrl' in data) || (data.paypalBaseUrl is string && data.paypalBaseUrl.size() <= 250)) &&
+             (!('enableDirectPaypalLinks' in data) || data.enableDirectPaypalLinks is bool) &&
+             (!('enableMercadoPago' in data) || data.enableMercadoPago is bool) &&
+             (!('enableBankTransfer' in data) || data.enableBankTransfer is bool) &&
+             (!('enableWhatsAppCheckout' in data) || data.enableWhatsAppCheckout is bool);
+    }
+
+    // Validator for Purchased License records
+    function isValidPurchasedLicense(data) {
+      return data.orderId is string && data.orderId.size() > 0 && data.orderId.size() <= 128 &&
+             data.beatTitle is string && data.beatTitle.size() > 0 && data.beatTitle.size() <= 150 &&
+             data.beatId is string && data.beatId.size() > 0 && data.beatId.size() <= 128 &&
+             data.buyerName is string && data.buyerName.size() > 0 && data.buyerName.size() <= 100 &&
+             data.buyerEmail is string && data.buyerEmail.size() > 0 && data.buyerEmail.size() <= 100 &&
+             data.tierKey is string && data.tierKey.size() > 0 && data.tierKey.size() <= 30 &&
+             data.amountPaid is number && data.amountPaid >= 0 &&
+             data.purchaseDate is string && data.purchaseDate.size() <= 50;
+    }
+
+    // BEATS COLLECTION
+    match /beats/{beatId} {
+      allow read: if true;
+      allow create: if isValidId(beatId) && isValidBeat(incoming());
+      allow update: if isValidId(beatId) && isValidBeat(incoming());
+      allow delete: if isValidId(beatId);
+    }
+
+    // STORE SETTINGS COLLECTION
+    match /settings/{settingId} {
+      allow read: if true;
+      allow create, update: if isValidId(settingId) && isValidPaymentConfig(incoming());
+      allow delete: if false;
+    }
+
+    // PURCHASES & LICENSES CONTRACTS COLLECTION
+    match /purchases/{purchaseId} {
+      allow read: if true;
+      allow create: if isValidId(purchaseId) && isValidPurchasedLicense(incoming());
+      allow update, delete: if false;
+    }
+
+    // ADMINS COLLECTION
+    match /admins/{adminId} {
+      allow read: if isProducerAdmin();
+      allow write: if false;
+    }
+  }
+}
