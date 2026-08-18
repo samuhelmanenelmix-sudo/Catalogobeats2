@@ -23,13 +23,12 @@ import {
   Copy,
   CheckCheck,
   Link2,
-  Youtube,
   Share2
 } from 'lucide-react';
 import { Beat, Genre, PaymentGatewaysConfig } from '../types';
 import { GENRES_LIST, DEFAULT_LICENSE_TIERS } from '../data/defaultBeats';
 import { PaypalLogo } from './PaypalLogo';
-import { getBeatDirectUrl, getBeatSlug, getBeatYoutubeShortSnippet, getBeatYoutubeSnippet, copyToClipboard } from '../utils/beatLinks';
+import { getBeatDirectUrl, getBeatSlug, copyToClipboard } from '../utils/beatLinks';
 import { processMasterWavToPreviewClip, AudioProcessingProgress } from '../utils/audioProcessor';
 import { AudioPreviewClipCard } from './AudioPreviewClipCard';
 
@@ -50,7 +49,7 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
   onDeleteBeat,
   paymentConfig,
 }) => {
-  const [activeTab, setActiveTab] = useState<'info' | 'pricing' | 'paypal' | 'media' | 'youtube'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'pricing' | 'paypal' | 'media'>('info');
 
   // General details
   const [title, setTitle] = useState('');
@@ -174,13 +173,31 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
     setPaypalPremium(`${base}${pricePremium.toFixed(2)}${paymentConfig.currency}`);
   };
 
-  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = () => {
+      reader.onload = async () => {
         if (typeof reader.result === 'string') {
-          setCoverUrl(reader.result);
+          try {
+            const res = await fetch('/api/upload-image', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                imageBase64: reader.result,
+                fileName: file.name
+              })
+            });
+            const data = await res.json();
+            if (data && data.url) {
+              setCoverUrl(data.url);
+              return;
+            }
+          } catch (err) {
+            console.warn('Error al subir imagen al servidor:', err);
+          }
+          // Default fallback if server not available
+          setCoverUrl('https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80');
         }
       };
       reader.readAsDataURL(file);
@@ -220,7 +237,7 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
       });
 
       // Upload the processed watermarked preview blob permanently to the server
-      let permanentUrl = result.previewUrl;
+      let permanentUrl = '/subestimado.mp3';
       try {
         const base64Audio = await blobToBase64(result.previewBlob);
         const uploadRes = await fetch('/api/upload-audio', {
@@ -237,7 +254,7 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
           permanentUrl = uploadData.url;
         }
       } catch (uploadErr) {
-        console.warn('Error al subir preview al servidor, usando fallback local:', uploadErr);
+        console.warn('Error al subir preview al servidor, usando fallback:', uploadErr);
       }
 
       setAudioPreviewUrl(permanentUrl);
@@ -270,7 +287,7 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
       const reader = new FileReader();
       reader.onload = async () => {
         if (typeof reader.result === 'string') {
-          let directUrl = reader.result;
+          let directUrl = '/subestimado.mp3';
           try {
             const uploadRes = await fetch('/api/upload-audio', {
               method: 'POST',
@@ -299,6 +316,7 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
       }
     } catch (err) {
       console.error('Error procesando archivo de audio:', err);
+    } finally {
       setIsProcessingAudio(false);
     }
   };
@@ -348,6 +366,16 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
     const secs = parseInt(parts[1], 10) || 50;
     const durationSeconds = mins * 60 + secs;
 
+    let cleanCover = coverUrl.trim() || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80';
+    if (cleanCover.startsWith('data:image/') || cleanCover.length > 2048) {
+      cleanCover = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80';
+    }
+
+    let cleanAudio = (audioPreviewUrl || '/subestimado.mp3').trim();
+    if (cleanAudio.startsWith('data:audio/') || cleanAudio.startsWith('data:application/') || cleanAudio.length > 2048) {
+      cleanAudio = '/subestimado.mp3';
+    }
+
     const updatedBeat: Beat = {
       id: beatToEdit ? beatToEdit.id : `beat-${Date.now()}`,
       title: title.trim(),
@@ -360,13 +388,14 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
       tags: tagsArray.length > 0 ? tagsArray : ['#Beat'],
       duration: duration.trim() || '2:50',
       durationSeconds,
-      coverUrl: coverUrl.trim() || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
-      audioPreviewUrl: audioPreviewUrl.trim(),
+      coverUrl: cleanCover,
+      audioUrl: cleanAudio,
+      audioPreviewUrl: cleanAudio,
       audioFileName: masterFileName || beatToEdit?.audioFileName,
       stemsFileUrl: stemsFileUrl.trim(),
       previewDuration: previewDuration || 40,
       isWatermarkedPreview: true,
-      previewWaveform: previewWaveform.length > 0 ? previewWaveform : undefined,
+      previewWaveform: previewWaveform.length > 0 ? previewWaveform.slice(0, 50) : undefined,
       description: description.trim(),
       plays: beatToEdit ? beatToEdit.plays : 0,
       likes: beatToEdit ? beatToEdit.likes : 0,
@@ -470,19 +499,6 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
             }`}
           >
             4. Audio & Artwork
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('youtube')}
-            className={`py-3 px-4 font-bold border-b-2 transition whitespace-nowrap flex items-center gap-1.5 ${
-              activeTab === 'youtube'
-                ? 'border-[#00F0FF] text-[#00F0FF] bg-[#00F0FF]/5'
-                : 'border-transparent text-sky-300/60 hover:text-white'
-            }`}
-          >
-            <Youtube className="w-3.5 h-3.5 text-red-400" />
-            <span>5. Enlace YouTube & Slug</span>
           </button>
         </div>
 
@@ -630,102 +646,6 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
                   <span>Marcar como VENDIDO EXCLUSIVO</span>
                 </label>
               </div>
-
-              {/* YouTube & Shareable Link Box (When beat exists) */}
-              {beatToEdit && (
-                <div className="p-4 bg-[#030A14] border border-[#00F0FF]/35 rounded-2xl space-y-3 mt-3 shadow-lg">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-mono font-bold text-[#00F0FF] flex items-center gap-1.5">
-                      <Link2 className="w-4 h-4 text-[#00F0FF]" />
-                      <span>Enlace Compartible (Limpio por Slug):</span>
-                    </span>
-                    <span className="text-[10px] font-mono text-sky-400/80 bg-[#051525] px-2 py-0.5 rounded border border-[#00F0FF]/20">
-                      ID: {beatToEdit.id}
-                    </span>
-                  </div>
-
-                  {/* Clean Short URL display */}
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-mono uppercase text-sky-300/70 font-semibold block">
-                      Enlace Directo del Beat:
-                    </span>
-                    <div className="p-2.5 bg-[#051525] border border-[#00F0FF]/25 rounded-xl text-xs font-mono text-white select-all break-all flex items-center justify-between gap-2">
-                      <span className="truncate">{getBeatDirectUrl(beatToEdit)}</span>
-                    </div>
-                  </div>
-
-                  {/* YouTube ready-to-paste snippet */}
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-mono uppercase text-sky-300/70 font-semibold block">
-                      Texto para Descripción de YouTube:
-                    </span>
-                    <div className="p-2.5 bg-[#02070E] border border-[#00F0FF]/20 rounded-xl text-xs font-mono text-sky-200 select-all break-all leading-relaxed">
-                      {getBeatYoutubeShortSnippet(beatToEdit)}
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                    <button
-                      type="button"
-                      id="btn-admin-copy-short-link"
-                      onClick={async () => {
-                        const success = await copyToClipboard(getBeatDirectUrl(beatToEdit));
-                        if (success) {
-                          setCopiedLinkType('url');
-                          setTimeout(() => setCopiedLinkType(null), 2500);
-                        }
-                      }}
-                      className={`py-2 px-3 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition ${
-                        copiedLinkType === 'url'
-                          ? 'bg-emerald-500 text-black shadow-[0_0_12px_rgba(16,185,129,0.4)]'
-                          : 'bg-[#00F0FF] hover:bg-[#38BDF8] text-black shadow-[0_0_10px_rgba(0,240,255,0.25)]'
-                      }`}
-                    >
-                      {copiedLinkType === 'url' ? (
-                        <>
-                          <CheckCheck className="w-3.5 h-3.5 stroke-[3]" />
-                          <span>¡Enlace Corto Copiado!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Copiar Enlace Corto</span>
-                        </>
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      id="btn-admin-copy-yt-phrase"
-                      onClick={async () => {
-                        const success = await copyToClipboard(getBeatYoutubeShortSnippet(beatToEdit));
-                        if (success) {
-                          setCopiedLinkType('phrase');
-                          setTimeout(() => setCopiedLinkType(null), 2500);
-                        }
-                      }}
-                      className={`py-2 px-3 rounded-xl text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition border ${
-                        copiedLinkType === 'phrase'
-                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
-                          : 'bg-[#051525] hover:bg-[#0A223D] border-[#00F0FF]/30 text-sky-200'
-                      }`}
-                    >
-                      {copiedLinkType === 'phrase' ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>¡Frase Copiada!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Link2 className="w-3.5 h-3.5 text-[#00F0FF]" />
-                          <span>Copiar Frase para YouTube</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -1151,70 +1071,40 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
                   🔒 Este enlace privado contiene el archivo WAV Master original en máxima fidelidad (24-bit) y se entrega automáticamente al cliente al pagar la licencia vía PayPal.
                 </p>
               </div>
-            </div>
-          )}
 
-          {/* TAB 5: YOUTUBE & SHORT LINK GENERATOR */}
-          {activeTab === 'youtube' && (
-            <div className="space-y-5 animate-in fade-in">
-              <div className="p-4 sm:p-5 rounded-2xl bg-[#051525] border border-[#00F0FF]/30 space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400">
-                    <Youtube className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-white font-mono uppercase tracking-wider">
-                      Enlace Corto & Textos para YouTube / Redes
-                    </h4>
-                    <p className="text-xs text-sky-300/70">
-                      Usa este enlace directo limpio para que tus seguidores de YouTube abran directamente este beat con reproductor y botón de compra.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Slug display */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-                  <div className="sm:col-span-1 p-3 bg-[#02070E] border border-[#00F0FF]/20 rounded-xl">
-                    <span className="text-[10px] font-mono uppercase text-sky-300/70 block">Identificador Limpio (Slug)</span>
-                    <span className="text-xs font-mono font-bold text-[#00F0FF]">
-                      {getBeatSlug(title || beatToEdit?.title || 'nuevo-beat')}
+              {/* Clean Single Link Box underneath uploaded audio files */}
+              {(audioPreviewUrl || stemsFileUrl || masterFileName) && (
+                <div className="p-4 bg-[#02070E] border border-[#00F0FF]/35 rounded-2xl space-y-2.5 shadow-[0_0_15px_rgba(0,240,255,0.08)]">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-mono font-bold text-[#00F0FF] flex items-center gap-1.5">
+                      <Link2 className="w-4 h-4 text-[#00F0FF]" />
+                      <span>Enlace Directo del Beat (Sincronizado con GitHub / Netlify)</span>
+                    </label>
+                    <span className="text-[10px] font-mono text-sky-300/60 bg-[#051525] px-2 py-0.5 rounded border border-[#00F0FF]/20">
+                      Slug: ?beat={getBeatSlug(title || beatToEdit?.title || 'beat')}
                     </span>
                   </div>
 
-                  <div className="sm:col-span-2 p-3 bg-[#02070E] border border-[#00F0FF]/20 rounded-xl">
-                    <span className="text-[10px] font-mono uppercase text-sky-300/70 block">Parámetro URL Oficial</span>
-                    <span className="text-xs font-mono font-bold text-white truncate block">
-                      ?beat={getBeatSlug(title || beatToEdit?.title || 'nuevo-beat')}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Direct Link Input with Copy Button */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-mono font-bold text-sky-300/80">
-                    1. Enlace Directo al Beat (URL Completa)
-                  </label>
                   <div className="flex gap-2">
                     <input
                       readOnly
-                      id="input-youtube-direct-url"
-                      value={getBeatDirectUrl(title ? { id: beatToEdit?.id || 'new', title, producer, genre, bpm: Number(bpm) || 120, keyScale, duration, tags: [], mood: [], isFeatured: false, tierPrices: { basic: priceBasic, media: priceMedia, exclusive: priceExclusive, premium: pricePremium } } as any : (beatToEdit || 'el-subestimado'))}
-                      className="flex-1 px-3.5 py-2.5 bg-[#02070E] border border-[#00F0FF]/30 rounded-xl text-xs font-mono text-[#00F0FF] select-all focus:outline-none"
+                      id="input-beat-direct-url"
+                      value={getBeatDirectUrl(title ? { id: beatToEdit?.id || 'new', title } as any : (beatToEdit || 'el-subestimado'))}
+                      className="flex-1 px-3.5 py-2 bg-[#000000] border border-[#00F0FF]/30 rounded-xl text-xs font-mono text-[#00F0FF] select-all focus:outline-none"
                     />
 
                     <button
                       type="button"
-                      id="btn-copy-beat-short-url"
+                      id="btn-copy-beat-direct-url"
                       onClick={async () => {
-                        const dummyBeat = { id: beatToEdit?.id || 'beat', title: title || beatToEdit?.title || 'beat', producer, genre, bpm: 120 } as any;
-                        const url = getBeatDirectUrl(dummyBeat);
+                        const url = getBeatDirectUrl(title ? { id: beatToEdit?.id || 'new', title } as any : (beatToEdit || 'el-subestimado'));
                         const ok = await copyToClipboard(url);
                         if (ok) {
                           setCopiedLinkType('url');
                           setTimeout(() => setCopiedLinkType(null), 2500);
                         }
                       }}
-                      className={`px-4 py-2.5 rounded-xl font-mono font-bold text-xs flex items-center gap-1.5 transition ${
+                      className={`px-4 py-2 rounded-xl font-mono font-bold text-xs flex items-center gap-1.5 transition ${
                         copiedLinkType === 'url'
                           ? 'bg-emerald-500 text-black shadow-[0_0_12px_rgba(52,211,153,0.5)]'
                           : 'bg-[#00F0FF] hover:bg-[#38BDF8] text-black shadow-[0_0_12px_rgba(0,240,255,0.3)]'
@@ -1222,13 +1112,13 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
                     >
                       {copiedLinkType === 'url' ? (
                         <>
-                          <Check className="w-4 h-4" />
+                          <Check className="w-3.5 h-3.5" />
                           <span>¡Copiado!</span>
                         </>
                       ) : (
                         <>
-                          <Copy className="w-4 h-4" />
-                          <span>Copiar Enlace</span>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copiar Link</span>
                         </>
                       )}
                     </button>
@@ -1237,83 +1127,15 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
                       href={getBeatDirectUrl(title ? { id: beatToEdit?.id || 'new', title } as any : (beatToEdit || 'el-subestimado'))}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="px-3 py-2.5 bg-[#051525] hover:bg-[#0A223D] border border-[#00F0FF]/30 rounded-xl text-xs font-mono text-sky-200 flex items-center gap-1"
-                      title="Abrir y probar enlace en nueva pestaña"
+                      className="px-3 py-2 bg-[#051525] hover:bg-[#0A223D] border border-[#00F0FF]/30 rounded-xl text-xs font-mono text-sky-200 flex items-center gap-1"
+                      title="Abrir enlace en nueva pestaña"
                     >
                       <ExternalLink className="w-4 h-4 text-[#00F0FF]" />
                     </a>
                   </div>
                 </div>
+              )}
 
-                {/* Short YouTube Phrase */}
-                <div className="space-y-1.5 pt-2">
-                  <div className="flex justify-between items-center text-xs">
-                    <label className="font-bold text-sky-300/80 font-mono">
-                      2. Frase de 1 Línea para Descripción de YouTube
-                    </label>
-                    <button
-                      type="button"
-                      id="btn-copy-phrase-modal"
-                      onClick={async () => {
-                        const dummyBeat = { id: beatToEdit?.id || 'beat', title: title || beatToEdit?.title || 'beat', producer, genre, bpm: 120 } as any;
-                        const snippet = getBeatYoutubeShortSnippet(dummyBeat);
-                        const ok = await copyToClipboard(snippet);
-                        if (ok) {
-                          setCopiedLinkType('phrase');
-                          setTimeout(() => setCopiedLinkType(null), 2500);
-                        }
-                      }}
-                      className={`text-xs font-mono flex items-center gap-1 transition ${
-                        copiedLinkType === 'phrase' ? 'text-emerald-400 font-bold' : 'text-[#00F0FF] hover:underline'
-                      }`}
-                    >
-                      {copiedLinkType === 'phrase' ? (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          <span>¡Frase Copiada!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Copiar Frase</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                  <div className="p-3 bg-[#02070E] border border-[#00F0FF]/25 rounded-xl font-mono text-xs text-sky-200">
-                    {`Compra este beat en este enlace: ${getBeatDirectUrl(title ? { id: beatToEdit?.id || 'new', title } as any : (beatToEdit || 'el-subestimado'))}`}
-                  </div>
-                </div>
-
-                {/* Full Description Template */}
-                <div className="space-y-1.5 pt-2">
-                  <div className="flex justify-between items-center text-xs">
-                    <label className="font-bold text-sky-300/80 font-mono">
-                      3. Plantilla Completa de Descripción para Video de YouTube
-                    </label>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const dummyBeat = { id: beatToEdit?.id || 'beat', title: title || beatToEdit?.title || 'beat', producer: producer || 'Samu Helman', genre, bpm: 120 } as any;
-                        const fullSnippet = getBeatYoutubeSnippet(dummyBeat);
-                        const ok = await copyToClipboard(fullSnippet);
-                        if (ok) {
-                          setCopiedLinkType('phrase');
-                          setTimeout(() => setCopiedLinkType(null), 2500);
-                        }
-                      }}
-                      className="text-xs font-mono text-[#00F0FF] hover:underline flex items-center gap-1"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      <span>Copiar Plantilla Completa</span>
-                    </button>
-                  </div>
-                  <pre className="p-3 bg-[#02070E] border border-[#00F0FF]/25 rounded-xl font-mono text-[11px] text-sky-200 whitespace-pre-wrap leading-relaxed">
-                    {getBeatYoutubeSnippet({ id: beatToEdit?.id || 'beat', title: title || 'Beat Instrumental', producer: producer || 'Samu Helman', genre, bpm: Number(bpm) || 120 } as any)}
-                  </pre>
-                </div>
-
-              </div>
             </div>
           )}
 

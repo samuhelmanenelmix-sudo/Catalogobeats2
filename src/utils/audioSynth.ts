@@ -122,7 +122,7 @@ class AudioEngine {
       this.stop();
       this.isPlaying = false;
       if (this.onErrorCallback) {
-        this.onErrorCallback('Error al cargar la pista de audio. Verifica el enlace MP3');
+        this.onErrorCallback('No se proporcionó una URL de audio válida o accesible para este beat.');
       }
       return { success: false, hasAudio: false, error: 'No audio URL provided' };
     }
@@ -218,7 +218,7 @@ class AudioEngine {
         console.warn('Error al cargar la pista de audio MP3/WAV:', normalizedUrl, e);
         this.stop();
         if (this.onErrorCallback) {
-          this.onErrorCallback('Error al cargar la pista de audio. Verifica el enlace MP3');
+          this.onErrorCallback('No se pudo acceder al archivo de audio. Verifica que la URL HTTPS o archivo local MP3 esté disponible.');
         }
       };
 

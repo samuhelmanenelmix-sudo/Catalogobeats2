@@ -46,7 +46,8 @@ import {
   seedInitialBeatsIfEmpty, 
   subscribeToPaymentConfig, 
   savePaymentConfigToFirestore, 
-  savePurchasedLicenseToFirestore 
+  savePurchasedLicenseToFirestore,
+  sanitizeBeatForFirestore
 } from './lib/firebase';
 
 const STORAGE_KEYS = {

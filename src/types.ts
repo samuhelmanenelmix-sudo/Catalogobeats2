@@ -61,6 +61,7 @@ export interface Beat {
   durationSeconds: number;
   coverUrl: string;
   audioPreviewUrl: string; // URL or synthesized audio
+  audioUrl?: string; // Direct HTTPS or local MP3 URL alias
   audioFileName?: string;
   stemsFileUrl?: string;
   previewDuration?: number; // Usually 40s preview clip

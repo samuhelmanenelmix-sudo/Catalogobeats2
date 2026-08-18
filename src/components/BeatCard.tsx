@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Play, Pause, Heart, Edit, Link2, Check, Share2 } from 'lucide-react';
 import { Beat } from '../types';
 import { PaypalLogo } from './PaypalLogo';
-import { getBeatDirectUrl, getBeatYoutubeShortSnippet, copyToClipboard } from '../utils/beatLinks';
+import { getBeatDirectUrl, copyToClipboard } from '../utils/beatLinks';
 import { BeatCoverImage } from './BeatCoverImage';
 
 interface BeatCardProps {
@@ -36,10 +36,10 @@ export const BeatCard: React.FC<BeatCardProps> = ({
   const lowestPrice = beat.tierPrices?.basic || 20.00;
   const isPlayingCurrent = isPlaying && isCurrentTrack;
 
-  const handleCopyYoutubeLink = async (e: React.MouseEvent) => {
+  const handleCopyDirectLink = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const snippet = getBeatYoutubeShortSnippet(beat);
-    const success = await copyToClipboard(snippet);
+    const directUrl = getBeatDirectUrl(beat);
+    const success = await copyToClipboard(directUrl);
     if (success) {
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 2200);
@@ -83,27 +83,27 @@ export const BeatCard: React.FC<BeatCardProps> = ({
             )}
           </div>
 
-          {/* Direct Link / Copy for YouTube Badge (Admin only) */}
+          {/* Direct Link / Copy for Beat (Admin only) */}
           {isAdminMode && (
             <button
-              id={`btn-copy-yt-${beat.id}`}
-              onClick={handleCopyYoutubeLink}
+              id={`btn-copy-link-${beat.id}`}
+              onClick={handleCopyDirectLink}
               className={`absolute top-2 right-2 z-10 flex items-center gap-1 backdrop-blur-md px-2 py-0.5 rounded-md text-[10px] font-mono font-bold transition ${
                 copiedLink 
                   ? 'bg-emerald-500 text-black shadow-[0_0_12px_rgba(16,185,129,0.5)] scale-105' 
                   : 'bg-[#000000]/80 text-[#00F0FF] hover:bg-[#051525] border border-[#00F0FF]/30'
               }`}
-              title="Copiar texto y enlace para tu descripción de YouTube"
+              title="Copiar enlace directo sincronizado del beat"
             >
               {copiedLink ? (
                 <>
                   <Check className="w-3 h-3 stroke-[3]" />
-                  <span>¡Link YouTube Copiado!</span>
+                  <span>¡Link Copiado!</span>
                 </>
               ) : (
                 <>
                   <Link2 className="w-3 h-3" />
-                  <span>Link YouTube</span>
+                  <span>Link Directo</span>
                 </>
               )}
             </button>

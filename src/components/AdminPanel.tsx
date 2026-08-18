@@ -16,14 +16,13 @@ import {
   Link2,
   Copy,
   Check,
-  Youtube,
   Share2,
   Cloud,
   Database
 } from 'lucide-react';
 import { Beat, PaymentGatewaysConfig } from '../types';
 import { BeatCoverImage } from './BeatCoverImage';
-import { getBeatDirectUrl, getBeatSlug, getBeatYoutubeShortSnippet, getBeatYoutubeSnippet, copyToClipboard } from '../utils/beatLinks';
+import { getBeatDirectUrl, getBeatSlug, copyToClipboard } from '../utils/beatLinks';
 
 interface AdminPanelProps {
   beats: Beat[];
@@ -46,7 +45,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 }) => {
   const [copiedBeatId, setCopiedBeatId] = useState<string | null>(null);
   const [selectedBeatForLink, setSelectedBeatForLink] = useState<string>(beats[0]?.id || '');
-  const [copiedYoutubeText, setCopiedYoutubeText] = useState<boolean>(false);
 
   const beatsWithPaypal = beats.filter(
     (b) => b.paypalLinks?.basic || b.paypalLinks?.premium || b.paypalLinks?.unlimited || b.paypalLinks?.exclusive
@@ -67,15 +65,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const currentSelectedBeat = beats.find(b => b.id === selectedBeatForLink) || beats[0];
-
-  const handleCopyYoutubeSnippet = async (beat: Beat) => {
-    const text = getBeatYoutubeShortSnippet(beat);
-    const success = await copyToClipboard(text);
-    if (success) {
-      setCopiedYoutubeText(true);
-      setTimeout(() => setCopiedYoutubeText(false), 2500);
-    }
-  };
 
   return (
     <div className="bg-[#030A14] border border-[#00F0FF]/35 rounded-3xl p-5 sm:p-6 mb-8 text-[#E0F2FE] shadow-[0_0_30px_rgba(0,240,255,0.12)] relative overflow-hidden">
@@ -248,23 +237,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         </div>
       </div>
 
-      {/* YouTube & Social Media Links Generator Box */}
+      {/* Single Beat Link Box (Synchronized with GitHub / Netlify) */}
       {beats.length > 0 && currentSelectedBeat && (
         <div className="mt-4 pt-4 border-t border-[#00F0FF]/20 bg-[#020B17]/70 -mx-5 -mb-5 sm:-mx-6 sm:-mb-6 p-4 sm:p-5 rounded-b-3xl">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 mb-3">
             <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-400">
-                <Youtube className="w-4 h-4" />
+              <div className="p-1.5 rounded-lg bg-[#00F0FF]/15 border border-[#00F0FF]/30 text-[#00F0FF]">
+                <Link2 className="w-4 h-4" />
               </div>
               <div>
                 <h4 className="text-xs font-bold font-mono uppercase tracking-wider text-white flex items-center gap-2">
-                  <span>Generador de Enlaces para YouTube & Redes Sociales</span>
+                  <span>Enlace Directo del Beat (Sincronizado con GitHub / Netlify)</span>
                   <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#00F0FF]/15 text-[#00F0FF] border border-[#00F0FF]/30">
-                    Slug Limpio (?beat=...)
+                    Slug: ?beat={getBeatSlug(currentSelectedBeat)}
                   </span>
                 </h4>
                 <p className="text-[11px] text-sky-300/70">
-                  Copia el enlace directo o la frase predefinida para pegar en la descripción de tus videos en YouTube.
+                  Enlace público sincronizado con la URL de despliegue para compartir en redes o con clientes.
                 </p>
               </div>
             </div>
@@ -273,7 +262,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             <div className="flex items-center gap-2 w-full md:w-auto">
               <span className="text-[11px] font-mono text-sky-300/80 whitespace-nowrap">Beat:</span>
               <select
-                id="admin-select-youtube-beat"
+                id="admin-select-beat-for-link"
                 value={selectedBeatForLink || currentSelectedBeat.id}
                 onChange={(e) => setSelectedBeatForLink(e.target.value)}
                 className="w-full md:w-56 px-2.5 py-1.5 bg-[#051525] border border-[#00F0FF]/30 rounded-xl text-xs text-white font-mono focus:outline-none focus:border-[#00F0FF]"
@@ -289,7 +278,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
           {/* Quick Copy Link Bar */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 items-center">
-            <div className="lg:col-span-7 flex items-center gap-2 px-3 py-2 bg-[#051525] border border-[#00F0FF]/30 rounded-xl">
+            <div className="lg:col-span-8 flex items-center gap-2 px-3 py-2 bg-[#051525] border border-[#00F0FF]/30 rounded-xl">
               <Link2 className="w-4 h-4 text-[#00F0FF] shrink-0" />
               <input
                 readOnly
@@ -299,12 +288,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               />
             </div>
 
-            <div className="lg:col-span-5 flex flex-wrap sm:flex-nowrap gap-2">
+            <div className="lg:col-span-4 flex gap-2">
               <button
                 type="button"
                 id="admin-btn-copy-short-url"
                 onClick={() => handleCopyShortLink(currentSelectedBeat)}
-                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-mono font-bold transition ${
+                className={`flex-1 flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-mono font-bold transition ${
                   copiedBeatId === currentSelectedBeat.id
                     ? 'bg-emerald-500 text-black shadow-[0_0_12px_rgba(52,211,153,0.5)]'
                     : 'bg-[#00F0FF] hover:bg-[#38BDF8] text-black shadow-[0_0_12px_rgba(0,240,255,0.3)]'
@@ -313,38 +302,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 {copiedBeatId === currentSelectedBeat.id ? (
                   <>
                     <Check className="w-3.5 h-3.5" />
-                    <span>¡Enlace Corto Copiado!</span>
+                    <span>¡Link Copiado!</span>
                   </>
                 ) : (
                   <>
                     <Copy className="w-3.5 h-3.5" />
-                    <span>Copiar Enlace Corto</span>
+                    <span>Copiar Link</span>
                   </>
                 )}
               </button>
 
-              <button
-                type="button"
-                id="admin-btn-copy-yt-phrase"
-                onClick={() => handleCopyYoutubeSnippet(currentSelectedBeat)}
-                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-mono font-semibold transition border ${
-                  copiedYoutubeText
-                    ? 'bg-emerald-950/80 border-emerald-400 text-emerald-300'
-                    : 'bg-[#051525] hover:bg-[#0A223D] border-[#00F0FF]/40 text-[#E0F2FE]'
-                }`}
+              <a
+                href={getBeatDirectUrl(currentSelectedBeat)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-2 bg-[#051525] hover:bg-[#0A223D] border border-[#00F0FF]/30 rounded-xl text-sky-200 flex items-center justify-center transition"
+                title="Abrir enlace en nueva pestaña"
               >
-                {copiedYoutubeText ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>¡Frase Copiada!</span>
-                  </>
-                ) : (
-                  <>
-                    <Youtube className="w-3.5 h-3.5 text-red-400" />
-                    <span>Copiar Frase YouTube</span>
-                  </>
-                )}
-              </button>
+                <ExternalLink className="w-4 h-4 text-[#00F0FF]" />
+              </a>
             </div>
           </div>
         </div>

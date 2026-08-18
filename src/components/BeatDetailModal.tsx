@@ -8,19 +8,14 @@ import {
   ShieldCheck, 
   Share2,
   Copy,
-  CheckCheck,
-  Sparkles,
   Link2,
-  ExternalLink,
-  Youtube
+  ExternalLink
 } from 'lucide-react';
 import { Beat, LicenseTierKey } from '../types';
 import { DEFAULT_LICENSE_TIERS } from '../data/defaultBeats';
 import { PaypalLogo } from './PaypalLogo';
 import { 
   getBeatDirectUrl, 
-  getBeatYoutubeShortSnippet, 
-  getBeatYoutubeSnippet, 
   copyToClipboard 
 } from '../utils/beatLinks';
 import { BeatCoverImage } from './BeatCoverImage';
@@ -53,24 +48,18 @@ export const BeatDetailModal: React.FC<BeatDetailModalProps> = ({
   isAdmin = false,
 }) => {
   const [selectedTier, setSelectedTier] = useState<LicenseTierKey>('basic');
-  const [copiedType, setCopiedType] = useState<'url' | 'phrase' | 'full' | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   if (!isOpen || !beat) return null;
 
   const isPlayingCurrent = isPlaying && isCurrentTrack;
   const directUrl = getBeatDirectUrl(beat);
-  const shortSnippet = getBeatYoutubeShortSnippet(beat);
-  const fullSnippet = getBeatYoutubeSnippet(beat);
 
-  const handleCopy = async (type: 'url' | 'phrase' | 'full') => {
-    let textToCopy = directUrl;
-    if (type === 'phrase') textToCopy = shortSnippet;
-    if (type === 'full') textToCopy = fullSnippet;
-
-    const success = await copyToClipboard(textToCopy);
+  const handleCopyLink = async () => {
+    const success = await copyToClipboard(directUrl);
     if (success) {
-      setCopiedType(type);
-      setTimeout(() => setCopiedType(null), 2500);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2200);
     }
   };
 
@@ -160,72 +149,58 @@ export const BeatDetailModal: React.FC<BeatDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* YOUTUBE DIRECT LINK GENERATOR CARD (Visible EXCLUSIVELY for Admin) */}
-              {isAdmin && (
-                <div className="p-3.5 bg-[#051525] border border-[#00F0FF]/35 rounded-2xl space-y-2.5 shadow-[0_0_15px_rgba(0,240,255,0.1)] animate-in fade-in">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-white font-mono">
-                      <Link2 className="w-4 h-4 text-[#00F0FF]" />
-                      <span>Enlace para tu Descripción de YouTube</span>
-                    </div>
-                    <span className="text-[9px] font-mono text-[#00F0FF] bg-[#00F0FF]/10 px-1.5 py-0.5 rounded border border-[#00F0FF]/25">
-                      Solo Admin
-                    </span>
+              {/* SINGLE DIRECT BEAT LINK BOX (Synchronized with GitHub / Netlify) */}
+              <div className="p-3.5 bg-[#051525] border border-[#00F0FF]/35 rounded-2xl space-y-2 shadow-[0_0_15px_rgba(0,240,255,0.08)]">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-white font-mono">
+                    <Link2 className="w-4 h-4 text-[#00F0FF]" />
+                    <span>Enlace Directo del Beat</span>
                   </div>
-
-                  {/* The ready-to-paste text preview */}
-                  <div className="p-2 bg-[#02070E] border border-[#00F0FF]/20 rounded-xl font-mono text-[11px] text-sky-200 select-all break-all leading-relaxed">
-                    {shortSnippet}
-                  </div>
-
-                  {/* One-click copy buttons */}
-                  <div className="grid grid-cols-2 gap-2 pt-0.5">
-                    <button
-                      id="btn-copy-phrase-yt"
-                      onClick={() => handleCopy('phrase')}
-                      className={`py-2 px-2.5 rounded-xl font-mono font-bold text-xs flex items-center justify-center gap-1.5 transition ${
-                        copiedType === 'phrase'
-                          ? 'bg-emerald-500 text-black shadow-[0_0_12px_rgba(16,185,129,0.4)]'
-                          : 'bg-[#00F0FF] hover:bg-[#38BDF8] text-black shadow-[0_0_10px_rgba(0,240,255,0.25)]'
-                      }`}
-                    >
-                      {copiedType === 'phrase' ? (
-                        <>
-                          <CheckCheck className="w-3.5 h-3.5 stroke-[3]" />
-                          <span>¡Frase Copiada!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Copiar para YouTube</span>
-                        </>
-                      )}
-                    </button>
-
-                    <button
-                      id="btn-copy-url-only"
-                      onClick={() => handleCopy('url')}
-                      className={`py-2 px-2.5 rounded-xl font-mono text-xs flex items-center justify-center gap-1.5 transition border ${
-                        copiedType === 'url'
-                          ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
-                          : 'bg-[#030A14] hover:bg-[#0A223D] border-[#00F0FF]/30 text-sky-200'
-                      }`}
-                    >
-                      {copiedType === 'url' ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>¡Link Copiado!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Link2 className="w-3.5 h-3.5 text-[#00F0FF]" />
-                          <span>Copiar Solo Enlace</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
+                  <span className="text-[9px] font-mono text-[#00F0FF] bg-[#00F0FF]/10 px-1.5 py-0.5 rounded border border-[#00F0FF]/25">
+                    Sincronizado
+                  </span>
                 </div>
-              )}
+
+                {/* Direct Link Input with Action Buttons */}
+                <div className="flex gap-1.5">
+                  <input
+                    readOnly
+                    id="input-detail-direct-link"
+                    value={directUrl}
+                    className="flex-1 px-3 py-2 bg-[#000000] border border-[#00F0FF]/25 rounded-xl text-xs font-mono text-[#00F0FF] select-all focus:outline-none"
+                  />
+                  <button
+                    id="btn-copy-beat-link-detail"
+                    onClick={handleCopyLink}
+                    className={`px-3.5 py-2 rounded-xl font-mono font-bold text-xs flex items-center gap-1.5 transition ${
+                      copiedLink
+                        ? 'bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.4)]'
+                        : 'bg-[#00F0FF] hover:bg-[#38BDF8] text-black shadow-[0_0_10px_rgba(0,240,255,0.25)]'
+                    }`}
+                  >
+                    {copiedLink ? (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>¡Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copiar</span>
+                      </>
+                    )}
+                  </button>
+                  <a
+                    href={directUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 bg-[#000000] hover:bg-[#0A223D] border border-[#00F0FF]/30 rounded-xl text-sky-200 flex items-center justify-center transition"
+                    title="Abrir enlace en nueva pestaña"
+                  >
+                    <ExternalLink className="w-4 h-4 text-[#00F0FF]" />
+                  </a>
+                </div>
+              </div>
 
             </div>
 

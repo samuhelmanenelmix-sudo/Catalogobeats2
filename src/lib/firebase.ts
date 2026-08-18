@@ -89,6 +89,44 @@ const BEATS_COLLECTION = 'beats';
 const SETTINGS_COLLECTION = 'settings';
 const PURCHASES_COLLECTION = 'purchases';
 
+const DEFAULT_COVER = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80';
+
+/**
+ * Sanitizes a Beat object before writing to Firestore.
+ * Ensures that audioUrl and audioPreviewUrl are purely lightweight string URLs
+ * (e.g., relative path '/subestimado.mp3', '/uploads/...', or external https://),
+ * completely stripping any heavy Base64 or binary data to prevent Firestore document size errors.
+ */
+export function sanitizeBeatForFirestore(beat: Beat): Beat {
+  let cleanCover = beat.coverUrl ? beat.coverUrl.trim() : DEFAULT_COVER;
+  // If coverUrl is a large Base64 data string (>1KB), replace with default cover
+  if (cleanCover.startsWith('data:image/') || cleanCover.length > 2048) {
+    cleanCover = DEFAULT_COVER;
+  }
+
+  let cleanAudioUrl = (beat.audioUrl || beat.audioPreviewUrl || '/subestimado.mp3').trim();
+  // Strip any accidental data:audio/ Base64 payload
+  if (cleanAudioUrl.startsWith('data:audio/') || cleanAudioUrl.startsWith('data:application/') || cleanAudioUrl.length > 2048) {
+    cleanAudioUrl = '/subestimado.mp3';
+  }
+
+  let cleanAudioPreviewUrl = (beat.audioPreviewUrl || cleanAudioUrl || '/subestimado.mp3').trim();
+  if (cleanAudioPreviewUrl.startsWith('data:audio/') || cleanAudioPreviewUrl.startsWith('data:application/') || cleanAudioPreviewUrl.length > 2048) {
+    cleanAudioPreviewUrl = cleanAudioUrl;
+  }
+
+  return {
+    ...beat,
+    coverUrl: cleanCover,
+    audioUrl: cleanAudioUrl,
+    audioPreviewUrl: cleanAudioPreviewUrl,
+    // Ensure previewWaveform is reasonably sized (max 50 points)
+    previewWaveform: Array.isArray(beat.previewWaveform)
+      ? beat.previewWaveform.slice(0, 50).map(v => Number(Number(v).toFixed(2)))
+      : undefined
+  };
+}
+
 /**
  * Subscribe to real-time updates for the entire beat catalog.
  * Invokes onBeatsUpdate whenever a beat is added, edited, or removed anywhere in the cloud.
@@ -127,14 +165,16 @@ export function subscribeToRealtimeBeats(
 }
 
 /**
- * Save or update a single beat directly in Firestore
+ * Save or update a single beat directly in Firestore.
+ * Automatically sanitizes payload to guarantee document size is well under 1MB.
  */
 export async function saveBeatToFirestore(beat: Beat): Promise<void> {
-  const path = `${BEATS_COLLECTION}/${beat.id}`;
+  const sanitized = sanitizeBeatForFirestore(beat);
+  const path = `${BEATS_COLLECTION}/${sanitized.id}`;
   try {
-    const docRef = doc(db, BEATS_COLLECTION, beat.id);
+    const docRef = doc(db, BEATS_COLLECTION, sanitized.id);
     await setDoc(docRef, {
-      ...beat,
+      ...sanitized,
       updatedAt: new Date().toISOString()
     }, { merge: true });
   } catch (error) {
@@ -156,7 +196,8 @@ export async function deleteBeatFromFirestore(beatId: string): Promise<void> {
 }
 
 /**
- * Bulk seed or sync initial beats to Firestore if cloud database is empty
+ * Bulk seed or sync initial beats to Firestore if cloud database is empty.
+ * Never writes large binary or Base64 payloads to Firestore.
  */
 export async function seedInitialBeatsIfEmpty(initialBeats: Beat[]): Promise<void> {
   try {
@@ -164,11 +205,12 @@ export async function seedInitialBeatsIfEmpty(initialBeats: Beat[]): Promise<voi
     const snapshot = await getDocs(colRef);
     if (snapshot.empty && initialBeats.length > 0) {
       console.log('Seeding initial beats to Firestore cloud database...');
-      for (const beat of initialBeats) {
-        const docRef = doc(db, BEATS_COLLECTION, beat.id);
-        await setDoc(docRef, beat);
+      for (const rawBeat of initialBeats) {
+        const sanitized = sanitizeBeatForFirestore(rawBeat);
+        const docRef = doc(db, BEATS_COLLECTION, sanitized.id);
+        await setDoc(docRef, sanitized);
       }
-      console.log('Firestore seed completed successfully.');
+      console.log('Firestore seed completed successfully with sanitized lightweight documents.');
     }
   } catch (error) {
     console.warn('Could not auto-seed Firestore (non-fatal):', error);
