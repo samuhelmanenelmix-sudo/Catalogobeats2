@@ -15,8 +15,8 @@ const PORT = 3000;
 
 // Security & Middlewares
 app.use(cors());
-app.use(express.json({ limit: '150mb' }));
-app.use(express.urlencoded({ limit: '150mb', extended: true }));
+app.use(express.json({ limit: '500mb' }));
+app.use(express.urlencoded({ limit: '500mb', extended: true }));
 
 // File-backed Persistence, Uploads & Private storage setup
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -137,7 +137,28 @@ function loadBeatsCatalog(): any[] {
 
 function saveBeatsCatalog(beats: any[]): boolean {
   try {
-    fs.writeFileSync(BEATS_FILE, JSON.stringify(beats, null, 2), 'utf-8');
+    const sanitizedBeats = Array.isArray(beats) ? beats.map((b) => {
+      let cover = b.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80';
+      if (typeof cover === 'string' && (cover.startsWith('data:image/') || cover.length > 2048)) {
+        cover = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80';
+      }
+      let audioUrl = b.audioUrl || b.audioPreviewUrl || '/subestimado.mp3';
+      if (typeof audioUrl === 'string' && (audioUrl.startsWith('data:audio/') || audioUrl.startsWith('data:application/') || audioUrl.length > 2048)) {
+        audioUrl = '/subestimado.mp3';
+      }
+      let audioPreview = b.audioPreviewUrl || audioUrl;
+      if (typeof audioPreview === 'string' && (audioPreview.startsWith('data:audio/') || audioPreview.startsWith('data:application/') || audioPreview.length > 2048)) {
+        audioPreview = audioUrl;
+      }
+      return {
+        ...b,
+        coverUrl: cover,
+        audioUrl,
+        audioPreviewUrl: audioPreview,
+      };
+    }) : [];
+
+    fs.writeFileSync(BEATS_FILE, JSON.stringify(sanitizedBeats, null, 2), 'utf-8');
     return true;
   } catch (err) {
     console.error('Error guardando en data/beats.json:', err);
@@ -475,6 +496,51 @@ app.post('/api/upload-audio', (req, res) => {
   } catch (error: any) {
     console.error('Error al procesar carga de audio:', error);
     return res.status(500).json({ error: 'Error del servidor al almacenar el archivo de audio' });
+  }
+});
+
+// ----------------------------------------------------
+// 2.15 API: POST /api/upload-image (Image Cover Upload to Disk)
+// ----------------------------------------------------
+app.post('/api/upload-image', (req, res) => {
+  try {
+    const { imageBase64, fileName } = req.body;
+    if (!imageBase64 || typeof imageBase64 !== 'string') {
+      return res.status(400).json({ error: 'Datos de imagen no válidos' });
+    }
+
+    const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z0-9_-]+;base64,/, '');
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    if (buffer.length === 0) {
+      return res.status(400).json({ error: 'El archivo de imagen está vacío' });
+    }
+
+    let ext = '.jpg';
+    if (fileName && path.extname(fileName)) {
+      ext = path.extname(fileName).toLowerCase();
+    } else if (imageBase64.startsWith('data:image/png')) {
+      ext = '.png';
+    } else if (imageBase64.startsWith('data:image/webp')) {
+      ext = '.webp';
+    }
+
+    const cleanBaseName = fileName ? path.basename(fileName, ext).replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 35) : 'cover';
+    const uniqueFileName = `cover-${cleanBaseName}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}${ext}`;
+    const filePath = path.join(UPLOADS_DIR, uniqueFileName);
+
+    fs.writeFileSync(filePath, buffer);
+    const publicUrl = `/uploads/${uniqueFileName}`;
+
+    return res.status(200).json({
+      success: true,
+      url: publicUrl,
+      fileName: uniqueFileName,
+      size: buffer.length
+    });
+  } catch (error: any) {
+    console.error('Error al procesar carga de imagen:', error);
+    return res.status(500).json({ error: 'Error del servidor al almacenar la portada' });
   }
 });
 
