@@ -113,7 +113,7 @@ export const INITIAL_BEATS: Beat[] = [
     durationSeconds: 290,
     audioUrl: "/subestimado.mp3",
     audioPreviewUrl: "/subestimado.mp3",
-    coverUrl: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80",
+    coverUrl: "",
     audioFileName: "el-subestimado-preview.mp3",
     previewDuration: 40,
     isWatermarkedPreview: true,

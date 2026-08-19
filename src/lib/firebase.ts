@@ -89,29 +89,38 @@ const BEATS_COLLECTION = 'beats';
 const SETTINGS_COLLECTION = 'settings';
 const PURCHASES_COLLECTION = 'purchases';
 
-const DEFAULT_COVER = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80';
-
 /**
  * Sanitizes a Beat object before writing to Firestore.
- * Ensures that audioUrl and audioPreviewUrl are purely lightweight string URLs
- * (e.g., relative path '/subestimado.mp3', '/uploads/...', or external https://),
- * completely stripping any heavy Base64 or binary data to prevent Firestore document size errors.
+ * Preserves self-contained Data URLs (Base64) for cover images and audio previews so they
+ * persist across all external devices (mobile, desktop, Netlify, offline) without 
+ * relying on ephemeral local server '/uploads/...' paths.
+ * Guarantees document size stays within Firestore's 1MB limit.
  */
 export function sanitizeBeatForFirestore(beat: Beat): Beat {
-  let cleanCover = beat.coverUrl ? beat.coverUrl.trim() : DEFAULT_COVER;
-  // If coverUrl is a large Base64 data string (>1KB), replace with default cover
-  if (cleanCover.startsWith('data:image/') || cleanCover.length > 2048) {
-    cleanCover = DEFAULT_COVER;
+  let cleanCover = beat.coverUrl ? beat.coverUrl.trim() : '';
+  // Remove unsplash or legacy broken local paths
+  if (cleanCover.includes('images.unsplash.com') || cleanCover.startsWith('/uploads/')) {
+    cleanCover = '';
+  }
+  // Cap max cover string size to 500KB to safely fit within Firestore 1MB document limit
+  if (cleanCover.length > 500000) {
+    cleanCover = '';
   }
 
   let cleanAudioUrl = (beat.audioUrl || beat.audioPreviewUrl || '/subestimado.mp3').trim();
-  // Strip any accidental data:audio/ Base64 payload
-  if (cleanAudioUrl.startsWith('data:audio/') || cleanAudioUrl.startsWith('data:application/') || cleanAudioUrl.length > 2048) {
+  if (cleanAudioUrl.startsWith('/uploads/')) {
+    cleanAudioUrl = '/subestimado.mp3';
+  }
+  // Cap max audio Data URL to 850KB to safely fit within Firestore 1MB document limit
+  if (cleanAudioUrl.length > 850000) {
     cleanAudioUrl = '/subestimado.mp3';
   }
 
   let cleanAudioPreviewUrl = (beat.audioPreviewUrl || cleanAudioUrl || '/subestimado.mp3').trim();
-  if (cleanAudioPreviewUrl.startsWith('data:audio/') || cleanAudioPreviewUrl.startsWith('data:application/') || cleanAudioPreviewUrl.length > 2048) {
+  if (cleanAudioPreviewUrl.startsWith('/uploads/')) {
+    cleanAudioPreviewUrl = cleanAudioUrl;
+  }
+  if (cleanAudioPreviewUrl.length > 850000) {
     cleanAudioPreviewUrl = cleanAudioUrl;
   }
 

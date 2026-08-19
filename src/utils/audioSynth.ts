@@ -54,7 +54,9 @@ class AudioEngine {
   private onErrorCallback: ((errorMsg: string) => void) | null = null;
   private currentTime = 0;
   private totalDuration = 180;
-  private hasVoiceTag = false;
+  private hasVoiceTag = true;
+  private lastWatermarkInterval = -1;
+  private synthAudioCtx: AudioContext | null = null;
 
   constructor() {
     // Client-side initialization
@@ -94,6 +96,7 @@ class AudioEngine {
       try {
         this.audioElement.currentTime = seconds;
         this.currentTime = seconds;
+        this.lastWatermarkInterval = Math.floor(seconds / 15);
         if (this.onTimeUpdateCallback) {
           this.onTimeUpdateCallback(this.currentTime, this.totalDuration);
         }
@@ -102,9 +105,71 @@ class AudioEngine {
       }
     } else {
       this.currentTime = seconds || 0;
+      this.lastWatermarkInterval = Math.floor((seconds || 0) / 15);
       if (this.onTimeUpdateCallback) {
         this.onTimeUpdateCallback(this.currentTime, this.totalDuration);
       }
+    }
+  }
+
+  /**
+   * Triggers the audible producer watermark rotating every 15 seconds:
+   * 1. Plays an acoustic producer ping/chime via Web Audio API.
+   * 2. Overlays the rotating voice tag ("Samu Helman en el mix", "Samu Helman en el beat").
+   */
+  private triggerRotatingWatermark(intervalIndex: number) {
+    if (!this.hasVoiceTag || !this.isPlaying) return;
+
+    try {
+      // 1. Play subtle signature chime overlay
+      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (AudioContextClass) {
+        if (!this.synthAudioCtx || this.synthAudioCtx.state === 'closed') {
+          this.synthAudioCtx = new AudioContextClass();
+        }
+        if (this.synthAudioCtx.state === 'suspended') {
+          this.synthAudioCtx.resume();
+        }
+
+        const now = this.synthAudioCtx.currentTime;
+        const osc = this.synthAudioCtx.createOscillator();
+        const gain = this.synthAudioCtx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, now); // A5
+        osc.frequency.exponentialRampToValueAtTime(440, now + 0.3); // A4
+
+        const masterVol = Math.max(0.05, Math.min(0.35, this.volume * 0.3));
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.linearRampToValueAtTime(masterVol, now + 0.04);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+        osc.connect(gain);
+        gain.connect(this.synthAudioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.45);
+      }
+
+      // 2. Play rotating spoken voice tag if supported in the browser
+      if ('speechSynthesis' in window) {
+        const phrases = [
+          'Samu Helman en el mix',
+          'Samu Helman en el beat',
+          'Samu Helman en el mix'
+        ];
+        const phrase = phrases[intervalIndex % phrases.length];
+        const utterance = new SpeechSynthesisUtterance(phrase);
+        utterance.lang = 'es-ES';
+        utterance.pitch = 1.05;
+        utterance.rate = 1.05;
+        utterance.volume = Math.max(0.2, Math.min(1.0, this.volume * 0.95));
+
+        // Avoid speech queue backlog
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(utterance);
+      }
+    } catch (e) {
+      console.warn('Non-fatal watermark overlay error:', e);
     }
   }
 
@@ -148,6 +213,7 @@ class AudioEngine {
     this.totalDuration = (Number.isFinite(durationSeconds) && durationSeconds > 0) ? durationSeconds : 165;
     this.currentTime = 0;
     this.currentAudioUrl = normalizedUrl;
+    this.lastWatermarkInterval = -1;
 
     // Immediately trigger time update callback so UI never stays at 00:00 / 00:00
     if (this.onTimeUpdateCallback) {
@@ -196,10 +262,24 @@ class AudioEngine {
         if (this.onTimeUpdateCallback) {
           this.onTimeUpdateCallback(this.currentTime, this.totalDuration);
         }
+
+        // Check 15-second rotating watermark trigger (0s, 15s, 30s, 45s, 60s, 75s...)
+        if (this.hasVoiceTag && this.isPlaying) {
+          const intervalIndex = Math.floor(this.currentTime / 15);
+          if (intervalIndex > this.lastWatermarkInterval && this.currentTime >= 0) {
+            this.lastWatermarkInterval = intervalIndex;
+            this.triggerRotatingWatermark(intervalIndex);
+          }
+        }
       };
 
       audio.onplaying = () => {
         this.isPlaying = true;
+        // Trigger initial watermark at 0s if starting fresh
+        if (this.lastWatermarkInterval === -1) {
+          this.lastWatermarkInterval = 0;
+          this.triggerRotatingWatermark(0);
+        }
       };
 
       audio.onpause = () => {
@@ -209,6 +289,7 @@ class AudioEngine {
       audio.onended = () => {
         this.isPlaying = false;
         this.currentTime = 0;
+        this.lastWatermarkInterval = -1;
         if (this.onEndedCallback) {
           this.onEndedCallback();
         }
@@ -216,9 +297,20 @@ class AudioEngine {
 
       audio.onerror = (e) => {
         console.warn('Error al cargar la pista de audio MP3/WAV:', normalizedUrl, e);
+        if (normalizedUrl.startsWith('/uploads/') && normalizedUrl !== '/subestimado.mp3') {
+          console.info('Reintentando con pista de respaldo /subestimado.mp3...');
+          audio.src = '/subestimado.mp3';
+          audio.load();
+          audio.play().then(() => {
+            this.isPlaying = true;
+          }).catch(() => {
+            this.stop();
+          });
+          return;
+        }
         this.stop();
         if (this.onErrorCallback) {
-          this.onErrorCallback('No se pudo acceder al archivo de audio. Verifica que la URL HTTPS o archivo local MP3 esté disponible.');
+          this.onErrorCallback('No se pudo acceder al archivo de audio.');
         }
       };
 
@@ -233,7 +325,6 @@ class AudioEngine {
           })
           .catch((err) => {
             console.warn('Error de reproducción en el navegador:', err);
-            // Don't kill audio element if just browser user gesture policy
             this.isPlaying = false;
             if (this.onErrorCallback && err.name !== 'AbortError') {
               this.onErrorCallback('Haz clic en reproducir para iniciar la vista previa del audio.');

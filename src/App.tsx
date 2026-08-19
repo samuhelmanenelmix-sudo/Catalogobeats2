@@ -224,6 +224,22 @@ export default function App() {
 
   const [isProducerLoginOpen, setIsProducerLoginOpen] = useState(false);
 
+  // Secret shortcut (Ctrl+Shift+A or Alt+A) to open Producer Access
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a')) ||
+        (e.altKey && (e.key === 'A' || e.key === 'a')) ||
+        (e.ctrlKey && e.altKey && (e.key === 'P' || e.key === 'p'))
+      ) {
+        e.preventDefault();
+        setIsProducerLoginOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Toggle Admin Mode Handler & URL Sync
   const handleToggleAdminMode = () => {
     setIsAdminMode((prev) => {
@@ -867,6 +883,28 @@ export default function App() {
             ))}
           </div>
         )}
+
+        {/* Footer */}
+        <footer className="mt-16 pt-8 pb-12 border-t border-[#00F0FF]/15 text-center text-xs text-sky-400/50 space-y-2">
+          <p>
+            © {new Date().getFullYear()}{' '}
+            <span 
+              onClick={() => {
+                if (!isAdminMode) {
+                  setIsProducerLoginOpen(true);
+                }
+              }}
+              className="hover:text-[#00F0FF] cursor-pointer transition select-none"
+              title="Samu Helman en el mix"
+            >
+              {paymentConfig.producerName || 'Samu Helman en el mix'}
+            </span>
+            . Todos los derechos reservados.
+          </p>
+          <p className="text-[11px] text-sky-500/40">
+            Licencias instrumentales directas con entrega automatizada de contratos e instrumentales en alta definición.
+          </p>
+        </footer>
 
       </main>
 

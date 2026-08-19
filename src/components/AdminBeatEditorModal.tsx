@@ -88,6 +88,10 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
   const [paypalPremium, setPaypalPremium] = useState('');
   const [copiedLinkType, setCopiedLinkType] = useState<'url' | 'phrase' | null>(null);
 
+  // Image Upload state
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [imageUploadStatus, setImageUploadStatus] = useState<string | null>(null);
+
   useEffect(() => {
     if (beatToEdit) {
       setTitle(beatToEdit.title);
@@ -173,38 +177,85 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
     setPaypalPremium(`${base}${pricePremium.toFixed(2)}${paymentConfig.currency}`);
   };
 
-  const handleImageFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        if (typeof reader.result === 'string') {
-          try {
-            const res = await fetch('/api/upload-image', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                imageBase64: reader.result,
-                fileName: file.name
-              })
-            });
-            const data = await res.json();
-            if (data && data.url) {
-              setCoverUrl(data.url);
-              return;
+    if (!file) return;
+
+    // Reset the input value so user can re-upload same file if desired
+    e.target.value = '';
+
+    setIsUploadingImage(true);
+    setImageUploadStatus('Procesando y optimizando imagen...');
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const rawDataUrl = event.target?.result as string;
+      if (!rawDataUrl) {
+        setIsUploadingImage(false);
+        return;
+      }
+
+      // Resize and compress through client-side Canvas to generate optimal Data URL (~30-60KB)
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const MAX_SIZE = 600;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_SIZE) {
+              height = Math.round((height * MAX_SIZE) / width);
+              width = MAX_SIZE;
             }
-          } catch (err) {
-            console.warn('Error al subir imagen al servidor:', err);
+          } else {
+            if (height > MAX_SIZE) {
+              width = Math.round((width * MAX_SIZE) / height);
+              height = MAX_SIZE;
+            }
           }
-          // Default fallback if server not available
-          setCoverUrl('https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80');
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            setCoverUrl(compressedDataUrl);
+            setImageUploadStatus('✓ Portada procesada y guardada como Data URL');
+            setTimeout(() => setImageUploadStatus(null), 3000);
+          } else {
+            setCoverUrl(rawDataUrl);
+            setImageUploadStatus('✓ Portada cargada como Data URL');
+            setTimeout(() => setImageUploadStatus(null), 3000);
+          }
+        } catch (canvasErr) {
+          console.warn('Canvas optimization fallback:', canvasErr);
+          setCoverUrl(rawDataUrl);
+          setImageUploadStatus('✓ Portada cargada como Data URL');
+          setTimeout(() => setImageUploadStatus(null), 3000);
+        } finally {
+          setIsUploadingImage(false);
         }
       };
-      reader.readAsDataURL(file);
-    }
+      img.onerror = () => {
+        setCoverUrl(rawDataUrl);
+        setIsUploadingImage(false);
+        setImageUploadStatus('✓ Portada cargada');
+        setTimeout(() => setImageUploadStatus(null), 3000);
+      };
+      img.src = rawDataUrl;
+    };
+    reader.onerror = () => {
+      setIsUploadingImage(false);
+      setImageUploadStatus('Error al leer el archivo');
+      setTimeout(() => setImageUploadStatus(null), 4000);
+    };
+    reader.readAsDataURL(file);
   };
 
-  // Helper to convert Blob to Base64
+  // Helper to convert Blob to Base64 Data URL
   const blobToBase64 = (blob: Blob): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -236,28 +287,9 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
         }
       });
 
-      // Upload the processed watermarked preview blob permanently to the server
-      let permanentUrl = '/subestimado.mp3';
-      try {
-        const base64Audio = await blobToBase64(result.previewBlob);
-        const uploadRes = await fetch('/api/upload-audio', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fileBase64: base64Audio,
-            fileName: `preview-${file.name.replace(/\.[^/.]+$/, '')}.wav`,
-            fileType: 'audio/wav'
-          })
-        });
-        const uploadData = await uploadRes.json();
-        if (uploadData && uploadData.url) {
-          permanentUrl = uploadData.url;
-        }
-      } catch (uploadErr) {
-        console.warn('Error al subir preview al servidor, usando fallback:', uploadErr);
-      }
-
-      setAudioPreviewUrl(permanentUrl);
+      // Convert the processed watermarked preview blob directly to self-contained Base64 Data URL
+      const base64Audio = await blobToBase64(result.previewBlob);
+      setAudioPreviewUrl(base64Audio);
       setPreviewDuration(result.duration);
       setPreviewWaveform(result.waveform);
       
@@ -268,7 +300,14 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
       }
     } catch (err) {
       console.error('Error al procesar archivo WAV master:', err);
-      alert('Hubo un problema al procesar el archivo de audio WAV. Por favor verifica que sea un formato válido.');
+      // Fallback: read directly as Data URL
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          setAudioPreviewUrl(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
     } finally {
       setTimeout(() => {
         setIsProcessingAudio(false);
@@ -277,48 +316,29 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
     }
   };
 
-  const handleAudioFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAudioFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setMasterFileName(file.name);
     setIsProcessingAudio(true);
-    try {
-      const reader = new FileReader();
-      reader.onload = async () => {
-        if (typeof reader.result === 'string') {
-          let directUrl = '/subestimado.mp3';
-          try {
-            const uploadRes = await fetch('/api/upload-audio', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                fileBase64: reader.result,
-                fileName: file.name,
-                fileType: file.type || 'audio/mpeg'
-              })
-            });
-            const uploadData = await uploadRes.json();
-            if (uploadData && uploadData.url) {
-              directUrl = uploadData.url;
-            }
-          } catch (uploadErr) {
-            console.warn('Error subiendo audio directo al servidor:', uploadErr);
-          }
-          setAudioPreviewUrl(directUrl);
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setAudioPreviewUrl(reader.result);
+        if (!title) {
+          const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+          setTitle(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
         }
-        setIsProcessingAudio(false);
-      };
-      reader.readAsDataURL(file);
-      if (!title) {
-        const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
-        setTitle(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
       }
-    } catch (err) {
-      console.error('Error procesando archivo de audio:', err);
-    } finally {
       setIsProcessingAudio(false);
-    }
+    };
+    reader.onerror = () => {
+      console.error('Error leyendo archivo de audio');
+      setIsProcessingAudio(false);
+    };
+    reader.readAsDataURL(file);
   };
 
   const toggleTestAudio = () => {
@@ -366,13 +386,13 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
     const secs = parseInt(parts[1], 10) || 50;
     const durationSeconds = mins * 60 + secs;
 
-    let cleanCover = coverUrl.trim() || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80';
-    if (cleanCover.startsWith('data:image/') || cleanCover.length > 2048) {
-      cleanCover = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80';
+    let cleanCover = coverUrl.trim();
+    if (cleanCover.includes('images.unsplash.com') || cleanCover.startsWith('/uploads/')) {
+      cleanCover = '';
     }
 
     let cleanAudio = (audioPreviewUrl || '/subestimado.mp3').trim();
-    if (cleanAudio.startsWith('data:audio/') || cleanAudio.startsWith('data:application/') || cleanAudio.length > 2048) {
+    if (cleanAudio.startsWith('/uploads/')) {
       cleanAudio = '/subestimado.mp3';
     }
 
@@ -870,27 +890,83 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
             <div className="space-y-5 animate-in fade-in">
               
               {/* Artwork Cover Section */}
-              <div>
-                <label className="block text-xs font-mono font-bold text-sky-300/80 mb-1">Portada / Artwork del Beat</label>
-                <div className="flex gap-2">
-                  <input
-                    id="input-cover-url"
-                    type="url"
-                    value={coverUrl}
-                    onChange={(e) => setCoverUrl(e.target.value)}
-                    placeholder="URL de imagen o sube tu archivo (.png, .jpg)..."
-                    className="flex-1 px-3.5 py-2.5 rounded-xl bg-[#051525] border border-[#00F0FF]/25 text-xs text-white placeholder-sky-400/30 focus:outline-none focus:border-[#00F0FF]"
-                  />
-                  <label className="px-4 py-2.5 bg-[#051525] hover:bg-[#0A223D] border border-[#00F0FF]/30 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition">
-                    <ImageIcon className="w-4 h-4 text-[#00F0FF]" />
-                    <span>Subir Imagen</span>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handleImageFileUpload}
-                      className="hidden" 
-                    />
+              <div className="bg-[#030A14] border border-[#00F0FF]/30 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-mono font-bold text-sky-300">
+                    Portada / Artwork del Beat (.jpg, .jpeg, .png, .webp)
                   </label>
+                  {imageUploadStatus && (
+                    <span className={`text-[11px] font-mono px-2 py-0.5 rounded ${
+                      imageUploadStatus.includes('✓') 
+                        ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-500/40' 
+                        : 'bg-[#051525] text-[#00F0FF] border border-[#00F0FF]/40 animate-pulse'
+                    }`}>
+                      {imageUploadStatus}
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
+                  {/* Square Cover Preview */}
+                  <div className="sm:col-span-4 relative aspect-square rounded-xl overflow-hidden bg-[#000000] border-2 border-[#00F0FF]/40 shadow-[0_0_15px_rgba(0,240,255,0.15)] flex items-center justify-center">
+                    {coverUrl ? (
+                      <img 
+                        src={coverUrl} 
+                        alt="Portada" 
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="text-center p-3">
+                        <div className="w-10 h-10 rounded-full bg-[#00F0FF]/10 border border-[#00F0FF]/30 text-[#00F0FF] flex items-center justify-center mx-auto mb-1.5">
+                          <ImageIcon className="w-5 h-5" />
+                        </div>
+                        <span className="text-[10px] font-mono text-sky-400/70 block">
+                          Sin imagen (Logo oficial)
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions & Inputs */}
+                  <div className="sm:col-span-8 space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      <label className={`px-4 py-2.5 bg-[#00F0FF] hover:bg-[#38BDF8] text-black font-bold rounded-xl text-xs flex items-center gap-2 cursor-pointer transition shadow-[0_0_15px_rgba(0,240,255,0.25)] ${
+                        isUploadingImage ? 'opacity-50 pointer-events-none' : ''
+                      }`}>
+                        <Upload className="w-4 h-4" />
+                        <span>{isUploadingImage ? 'Subiendo JPG...' : 'Subir Archivo JPG / PNG'}</span>
+                        <input 
+                          type="file" 
+                          accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" 
+                          onChange={handleImageFileUpload}
+                          className="hidden" 
+                        />
+                      </label>
+
+                      {coverUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setCoverUrl('')}
+                          className="px-3 py-2 bg-red-950/40 hover:bg-red-900/60 border border-red-500/40 text-red-300 rounded-xl text-xs font-mono transition"
+                        >
+                          Eliminar portada
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="text-[10px] font-mono text-sky-300/60 block">O ingresar URL directa de la imagen:</span>
+                      <input
+                        id="input-cover-url"
+                        type="text"
+                        value={coverUrl}
+                        onChange={(e) => setCoverUrl(e.target.value)}
+                        placeholder="https://... o /uploads/cover-..."
+                        className="w-full px-3.5 py-2 rounded-xl bg-[#051525] border border-[#00F0FF]/25 text-xs text-white placeholder-sky-400/30 focus:outline-none focus:border-[#00F0FF]"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
 

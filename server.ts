@@ -29,7 +29,7 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
-// Serve /uploads statically with range requests support and audio headers
+// Serve /uploads statically with range requests support and audio/image headers
 app.use('/uploads', express.static(UPLOADS_DIR, {
   setHeaders: (res, filePath) => {
     res.setHeader('Accept-Ranges', 'bytes');
@@ -41,6 +41,12 @@ app.use('/uploads', express.static(UPLOADS_DIR, {
       res.setHeader('Content-Type', 'audio/mpeg');
     } else if (filePath.endsWith('.m4a') || filePath.endsWith('.mp4')) {
       res.setHeader('Content-Type', 'audio/mp4');
+    } else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+      res.setHeader('Content-Type', 'image/jpeg');
+    } else if (filePath.endsWith('.png')) {
+      res.setHeader('Content-Type', 'image/png');
+    } else if (filePath.endsWith('.webp')) {
+      res.setHeader('Content-Type', 'image/webp');
     }
   }
 }));
@@ -138,16 +144,18 @@ function loadBeatsCatalog(): any[] {
 function saveBeatsCatalog(beats: any[]): boolean {
   try {
     const sanitizedBeats = Array.isArray(beats) ? beats.map((b) => {
-      let cover = b.coverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80';
-      if (typeof cover === 'string' && (cover.startsWith('data:image/') || cover.length > 2048)) {
-        cover = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80';
+      let cover = b.coverUrl || '';
+      if (typeof cover === 'string') {
+        if (cover.includes('images.unsplash.com') || cover.startsWith('/uploads/')) {
+          cover = '';
+        }
       }
       let audioUrl = b.audioUrl || b.audioPreviewUrl || '/subestimado.mp3';
-      if (typeof audioUrl === 'string' && (audioUrl.startsWith('data:audio/') || audioUrl.startsWith('data:application/') || audioUrl.length > 2048)) {
+      if (typeof audioUrl === 'string' && audioUrl.startsWith('/uploads/')) {
         audioUrl = '/subestimado.mp3';
       }
       let audioPreview = b.audioPreviewUrl || audioUrl;
-      if (typeof audioPreview === 'string' && (audioPreview.startsWith('data:audio/') || audioPreview.startsWith('data:application/') || audioPreview.length > 2048)) {
+      if (typeof audioPreview === 'string' && audioPreview.startsWith('/uploads/')) {
         audioPreview = audioUrl;
       }
       return {
@@ -509,8 +517,10 @@ app.post('/api/upload-image', (req, res) => {
       return res.status(400).json({ error: 'Datos de imagen no válidos' });
     }
 
-    const base64Data = imageBase64.replace(/^data:image\/[a-zA-Z0-9_-]+;base64,/, '');
-    const buffer = Buffer.from(base64Data, 'base64');
+    // Split at comma to safely extract Base64 data regardless of MIME type prefix
+    const commaIndex = imageBase64.indexOf(',');
+    const rawBase64 = commaIndex !== -1 ? imageBase64.substring(commaIndex + 1) : imageBase64;
+    const buffer = Buffer.from(rawBase64, 'base64');
 
     if (buffer.length === 0) {
       return res.status(400).json({ error: 'El archivo de imagen está vacío' });
@@ -518,19 +528,28 @@ app.post('/api/upload-image', (req, res) => {
 
     let ext = '.jpg';
     if (fileName && path.extname(fileName)) {
-      ext = path.extname(fileName).toLowerCase();
-    } else if (imageBase64.startsWith('data:image/png')) {
+      const parsedExt = path.extname(fileName).toLowerCase();
+      if (['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg'].includes(parsedExt)) {
+        ext = parsedExt === '.jpeg' ? '.jpg' : parsedExt;
+      }
+    } else if (imageBase64.includes('image/png')) {
       ext = '.png';
-    } else if (imageBase64.startsWith('data:image/webp')) {
+    } else if (imageBase64.includes('image/webp')) {
       ext = '.webp';
+    } else if (imageBase64.includes('image/jpeg') || imageBase64.includes('image/jpg')) {
+      ext = '.jpg';
     }
 
-    const cleanBaseName = fileName ? path.basename(fileName, ext).replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 35) : 'cover';
-    const uniqueFileName = `cover-${cleanBaseName}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}${ext}`;
+    const cleanBaseName = fileName 
+      ? path.basename(fileName, path.extname(fileName)).replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 35) 
+      : 'artwork';
+    const uniqueFileName = `cover-${cleanBaseName}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}${ext}`;
     const filePath = path.join(UPLOADS_DIR, uniqueFileName);
 
     fs.writeFileSync(filePath, buffer);
     const publicUrl = `/uploads/${uniqueFileName}`;
+
+    console.log(`[Upload Image] Portada guardada exitosamente: ${publicUrl} (${(buffer.length / 1024).toFixed(1)} KB)`);
 
     return res.status(200).json({
       success: true,

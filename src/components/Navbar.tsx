@@ -191,18 +191,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <span>Salir Admin</span>
                 </button>
               </>
-            ) : (
-              /* Discrete Admin Access Button in top right */
-              <button
-                id="btn-admin-login-discrete"
-                onClick={onOpenProducerLogin}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-mono font-medium rounded-lg text-sky-300/80 hover:text-[#00F0FF] bg-[#030A14] hover:bg-[#051525] border border-[#00F0FF]/25 hover:border-[#00F0FF]/60 transition shadow-sm"
-                title="Acceso de Administrador / Productor"
-              >
-                <Lock className="w-3.5 h-3.5 text-[#00F0FF]" />
-                <span className="hidden sm:inline">Acceso Admin</span>
-              </button>
-            )}
+            ) : null}
 
           </div>
 
