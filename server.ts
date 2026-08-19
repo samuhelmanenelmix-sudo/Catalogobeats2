@@ -146,16 +146,16 @@ function saveBeatsCatalog(beats: any[]): boolean {
     const sanitizedBeats = Array.isArray(beats) ? beats.map((b) => {
       let cover = b.coverUrl || '';
       if (typeof cover === 'string') {
-        if (cover.includes('images.unsplash.com') || cover.startsWith('/uploads/')) {
+        if (cover.includes('images.unsplash.com') || cover.startsWith('/uploads/') || cover.length > 200000) {
           cover = '';
         }
       }
       let audioUrl = b.audioUrl || b.audioPreviewUrl || '/subestimado.mp3';
-      if (typeof audioUrl === 'string' && audioUrl.startsWith('/uploads/')) {
+      if (typeof audioUrl === 'string' && (audioUrl.startsWith('data:audio/') || audioUrl.startsWith('data:application/') || audioUrl.startsWith('/uploads/') || audioUrl.length > 2048)) {
         audioUrl = '/subestimado.mp3';
       }
       let audioPreview = b.audioPreviewUrl || audioUrl;
-      if (typeof audioPreview === 'string' && audioPreview.startsWith('/uploads/')) {
+      if (typeof audioPreview === 'string' && (audioPreview.startsWith('data:audio/') || audioPreview.startsWith('data:application/') || audioPreview.startsWith('/uploads/') || audioPreview.length > 2048)) {
         audioPreview = audioUrl;
       }
       return {

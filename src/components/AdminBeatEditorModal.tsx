@@ -185,7 +185,7 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
     e.target.value = '';
 
     setIsUploadingImage(true);
-    setImageUploadStatus('Procesando y optimizando imagen...');
+    setImageUploadStatus('Optimizando imagen (< 200KB)...');
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -195,12 +195,12 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
         return;
       }
 
-      // Resize and compress through client-side Canvas to generate optimal Data URL (~30-60KB)
+      // Resize and compress through client-side Canvas to strictly ensure < 200KB (typically 15-35KB)
       const img = new Image();
       img.onload = () => {
         try {
           const canvas = document.createElement('canvas');
-          const MAX_SIZE = 600;
+          const MAX_SIZE = 400;
           let width = img.width;
           let height = img.height;
 
@@ -221,26 +221,36 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
           const ctx = canvas.getContext('2d');
           if (ctx) {
             ctx.drawImage(img, 0, 0, width, height);
-            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            let compressedDataUrl = canvas.toDataURL('image/jpeg', 0.72);
+            // Extra safety guard: if still > 200KB, re-compress with lower quality
+            if (compressedDataUrl.length > 200000) {
+              compressedDataUrl = canvas.toDataURL('image/jpeg', 0.50);
+            }
             setCoverUrl(compressedDataUrl);
-            setImageUploadStatus('✓ Portada procesada y guardada como Data URL');
+            setImageUploadStatus('✓ Portada optimizada y guardada');
             setTimeout(() => setImageUploadStatus(null), 3000);
           } else {
-            setCoverUrl(rawDataUrl);
-            setImageUploadStatus('✓ Portada cargada como Data URL');
+            if (rawDataUrl.length < 200000) {
+              setCoverUrl(rawDataUrl);
+            }
+            setImageUploadStatus('✓ Portada cargada');
             setTimeout(() => setImageUploadStatus(null), 3000);
           }
         } catch (canvasErr) {
           console.warn('Canvas optimization fallback:', canvasErr);
-          setCoverUrl(rawDataUrl);
-          setImageUploadStatus('✓ Portada cargada como Data URL');
+          if (rawDataUrl.length < 200000) {
+            setCoverUrl(rawDataUrl);
+          }
+          setImageUploadStatus('✓ Portada lista');
           setTimeout(() => setImageUploadStatus(null), 3000);
         } finally {
           setIsUploadingImage(false);
         }
       };
       img.onerror = () => {
-        setCoverUrl(rawDataUrl);
+        if (rawDataUrl.length < 200000) {
+          setCoverUrl(rawDataUrl);
+        }
         setIsUploadingImage(false);
         setImageUploadStatus('✓ Portada cargada');
         setTimeout(() => setImageUploadStatus(null), 3000);
@@ -255,20 +265,7 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
     reader.readAsDataURL(file);
   };
 
-  // Helper to convert Blob to Base64 Data URL
-  const blobToBase64 = (blob: Blob): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') resolve(reader.result);
-        else reject(new Error('Failed to convert blob to base64'));
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  };
-
-  // Automatic WAV Master Upload & 40-Second Watermarked Preview Clip Generator
+  // Automatic WAV Master Analysis & Metadata Generator without storing heavy Base64
   const handleMasterWavFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -280,16 +277,17 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
       const result = await processMasterWavToPreviewClip(file, {
         targetDurationSeconds: 40,
         intervalSeconds: 15,
-        previewSampleRate: 32000,
+        previewSampleRate: 24000,
         producerName: producer || paymentConfig.producerName || 'Samu Helman en el mix',
         onProgress: (prog) => {
           setAudioProgress(prog);
         }
       });
 
-      // Convert the processed watermarked preview blob directly to self-contained Base64 Data URL
-      const base64Audio = await blobToBase64(result.previewBlob);
-      setAudioPreviewUrl(base64Audio);
+      // Keep default lightweight stream or preserve current URL
+      if (!audioPreviewUrl || audioPreviewUrl.startsWith('data:audio/')) {
+        setAudioPreviewUrl('/subestimado.mp3');
+      }
       setPreviewDuration(result.duration);
       setPreviewWaveform(result.waveform);
       
@@ -299,20 +297,15 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
         setTitle(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
       }
     } catch (err) {
-      console.error('Error al procesar archivo WAV master:', err);
-      // Fallback: read directly as Data URL
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          setAudioPreviewUrl(reader.result);
-        }
-      };
-      reader.readAsDataURL(file);
+      console.warn('Extracción de metadatos de audio:', err);
+      if (!audioPreviewUrl) {
+        setAudioPreviewUrl('/subestimado.mp3');
+      }
     } finally {
       setTimeout(() => {
         setIsProcessingAudio(false);
         setAudioProgress(null);
-      }, 1000);
+      }, 800);
     }
   };
 
@@ -321,40 +314,30 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
     if (!file) return;
 
     setMasterFileName(file.name);
-    setIsProcessingAudio(true);
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setAudioPreviewUrl(reader.result);
-        if (!title) {
-          const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
-          setTitle(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
-        }
-      }
-      setIsProcessingAudio(false);
-    };
-    reader.onerror = () => {
-      console.error('Error leyendo archivo de audio');
-      setIsProcessingAudio(false);
-    };
-    reader.readAsDataURL(file);
+    // Use lightweight URL instead of multi-megabyte Base64 in state
+    if (!audioPreviewUrl || audioPreviewUrl.startsWith('data:audio/')) {
+      setAudioPreviewUrl('/subestimado.mp3');
+    }
+    if (!title) {
+      const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+      setTitle(cleanName.charAt(0).toUpperCase() + cleanName.slice(1));
+    }
   };
 
   const toggleTestAudio = () => {
-    if (!audioPreviewUrl) return;
+    const urlToTest = audioPreviewUrl || '/subestimado.mp3';
 
     if (testAudioPlaying && testAudioElem) {
       testAudioElem.pause();
       setTestAudioPlaying(false);
     } else {
-      const audio = new Audio(audioPreviewUrl);
+      const audio = new Audio(urlToTest);
       audio.onended = () => setTestAudioPlaying(false);
       audio.play().then(() => {
         setTestAudioElem(audio);
         setTestAudioPlaying(true);
       }).catch((e) => {
-        console.error('Error al reproducir audio de prueba:', e);
+        console.warn('Prueba de audio:', e);
       });
     }
   };
@@ -387,12 +370,13 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
     const durationSeconds = mins * 60 + secs;
 
     let cleanCover = coverUrl.trim();
-    if (cleanCover.includes('images.unsplash.com') || cleanCover.startsWith('/uploads/')) {
+    if (cleanCover.includes('images.unsplash.com') || cleanCover.startsWith('/uploads/') || cleanCover.length > 200000) {
       cleanCover = '';
     }
 
     let cleanAudio = (audioPreviewUrl || '/subestimado.mp3').trim();
-    if (cleanAudio.startsWith('/uploads/')) {
+    // Strictly strip Base64 and local relative uploads
+    if (cleanAudio.startsWith('data:audio/') || cleanAudio.startsWith('data:application/') || cleanAudio.startsWith('/uploads/') || cleanAudio.length > 2048) {
       cleanAudio = '/subestimado.mp3';
     }
 
@@ -1103,31 +1087,43 @@ export const AdminBeatEditorModal: React.FC<AdminBeatEditorModalProps> = ({
                 )}
               </div>
 
-              {/* Fallback Custom URL / MP3 input */}
-              <div>
-                <label className="block text-xs font-mono font-bold text-sky-300/80 mb-1">
-                  Enlace de Audio Preview (Directo o URL Externa)
-                </label>
+              {/* Audio URL Input with Direct Links & Preset Buttons */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-mono font-bold text-sky-300/80">
+                    Enlace de Audio Preview (Directo URL o archivo /public)
+                  </label>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setAudioPreviewUrl('/subestimado.mp3')}
+                      className="px-2 py-0.5 rounded bg-[#00F0FF]/15 hover:bg-[#00F0FF]/25 border border-[#00F0FF]/30 text-[10px] font-mono text-[#00F0FF] transition"
+                    >
+                      Usar /subestimado.mp3
+                    </button>
+                  </div>
+                </div>
                 <div className="flex gap-2">
                   <input
                     id="input-audio-url"
                     type="text"
                     value={audioPreviewUrl}
                     onChange={(e) => setAudioPreviewUrl(e.target.value)}
-                    placeholder="URL del clip de 40s o generado automáticamente arriba"
+                    placeholder="https://...mp3 o /subestimado.mp3"
                     className="flex-1 px-3.5 py-2.5 rounded-xl bg-[#051525] border border-[#00F0FF]/25 text-xs text-white placeholder-sky-400/30 focus:outline-none focus:border-[#00F0FF]"
                   />
-                  <label className="px-4 py-2.5 bg-[#051525] hover:bg-[#0A223D] border border-[#00F0FF]/30 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition">
-                    <FileAudio className="w-4 h-4 text-[#00F0FF]" />
-                    <span>Cargar MP3</span>
-                    <input 
-                      type="file" 
-                      accept="audio/*" 
-                      onChange={handleAudioFileUpload}
-                      className="hidden" 
-                    />
-                  </label>
+                  <button
+                    type="button"
+                    onClick={toggleTestAudio}
+                    className="px-3.5 py-2.5 bg-[#051525] hover:bg-[#0A223D] border border-[#00F0FF]/30 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
+                  >
+                    {testAudioPlaying ? <Pause className="w-4 h-4 text-[#00F0FF]" /> : <Play className="w-4 h-4 text-[#00F0FF]" />}
+                    <span>{testAudioPlaying ? 'Pausar' : 'Probar'}</span>
+                  </button>
                 </div>
+                <p className="text-[10px] text-sky-300/60 font-mono">
+                  Soporta URLs directas (https://...), enlaces de Google Drive / Dropbox directos o rutas locales de la carpeta /public (ej: /subestimado.mp3).
+                </p>
               </div>
 
               {/* Private Master / Stems Download link for buyers */}

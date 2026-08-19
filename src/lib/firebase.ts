@@ -91,10 +91,9 @@ const PURCHASES_COLLECTION = 'purchases';
 
 /**
  * Sanitizes a Beat object before writing to Firestore.
- * Preserves self-contained Data URLs (Base64) for cover images and audio previews so they
- * persist across all external devices (mobile, desktop, Netlify, offline) without 
- * relying on ephemeral local server '/uploads/...' paths.
- * Guarantees document size stays within Firestore's 1MB limit.
+ * Strictly uses lightweight URL strings (e.g. https://... or /subestimado.mp3) for audio.
+ * Prevents memory quota and document size issues by removing heavy Base64 audio.
+ * Ensures cover image is strictly under 200KB.
  */
 export function sanitizeBeatForFirestore(beat: Beat): Beat {
   let cleanCover = beat.coverUrl ? beat.coverUrl.trim() : '';
@@ -102,25 +101,19 @@ export function sanitizeBeatForFirestore(beat: Beat): Beat {
   if (cleanCover.includes('images.unsplash.com') || cleanCover.startsWith('/uploads/')) {
     cleanCover = '';
   }
-  // Cap max cover string size to 500KB to safely fit within Firestore 1MB document limit
-  if (cleanCover.length > 500000) {
+  // Cap max cover string size to 200KB
+  if (cleanCover.length > 200000) {
     cleanCover = '';
   }
 
   let cleanAudioUrl = (beat.audioUrl || beat.audioPreviewUrl || '/subestimado.mp3').trim();
-  if (cleanAudioUrl.startsWith('/uploads/')) {
-    cleanAudioUrl = '/subestimado.mp3';
-  }
-  // Cap max audio Data URL to 850KB to safely fit within Firestore 1MB document limit
-  if (cleanAudioUrl.length > 850000) {
+  // Strip Base64 audio and local uploads paths
+  if (cleanAudioUrl.startsWith('data:audio/') || cleanAudioUrl.startsWith('data:application/') || cleanAudioUrl.startsWith('/uploads/') || cleanAudioUrl.length > 2048) {
     cleanAudioUrl = '/subestimado.mp3';
   }
 
   let cleanAudioPreviewUrl = (beat.audioPreviewUrl || cleanAudioUrl || '/subestimado.mp3').trim();
-  if (cleanAudioPreviewUrl.startsWith('/uploads/')) {
-    cleanAudioPreviewUrl = cleanAudioUrl;
-  }
-  if (cleanAudioPreviewUrl.length > 850000) {
+  if (cleanAudioPreviewUrl.startsWith('data:audio/') || cleanAudioPreviewUrl.startsWith('data:application/') || cleanAudioPreviewUrl.startsWith('/uploads/') || cleanAudioPreviewUrl.length > 2048) {
     cleanAudioPreviewUrl = cleanAudioUrl;
   }
 

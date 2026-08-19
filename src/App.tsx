@@ -57,28 +57,63 @@ const STORAGE_KEYS = {
   LIKES: 'beatcatalog_likes_v2',
 };
 
-// Helper to safely read beats from localStorage
+// Immediate startup cleanup to purge oversized or corrupted Base64 audio from localStorage
+if (typeof window !== 'undefined') {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.BEATS);
+    if (raw && (raw.includes('data:audio/') || raw.length > 300000)) {
+      localStorage.removeItem(STORAGE_KEYS.BEATS);
+    }
+  } catch {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.BEATS);
+    } catch {}
+  }
+}
+
+// Helper to safely read beats from localStorage without failing or blocking
 const getSavedBeatsFromStorage = (): Beat[] => {
-  if (typeof window === 'undefined') return [];
+  if (typeof window === 'undefined') return INITIAL_BEATS;
   try {
     const saved = localStorage.getItem(STORAGE_KEYS.BEATS);
     if (saved) {
+      if (saved.includes('data:audio/') || saved.length > 300000) {
+        localStorage.removeItem(STORAGE_KEYS.BEATS);
+        return INITIAL_BEATS;
+      }
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((b) => ({
+          ...b,
+          audioUrl: (b.audioUrl && !b.audioUrl.startsWith('data:audio/') && !b.audioUrl.startsWith('/uploads/')) ? b.audioUrl : '/subestimado.mp3',
+          audioPreviewUrl: (b.audioPreviewUrl && !b.audioPreviewUrl.startsWith('data:audio/') && !b.audioPreviewUrl.startsWith('/uploads/')) ? b.audioPreviewUrl : '/subestimado.mp3',
+          coverUrl: (b.coverUrl && b.coverUrl.length < 200000 && !b.coverUrl.startsWith('/uploads/')) ? b.coverUrl : '',
+        }));
+      }
     }
   } catch (err) {
-    console.error('Error leyendo beats de localStorage:', err);
+    try {
+      localStorage.removeItem(STORAGE_KEYS.BEATS);
+    } catch {}
   }
-  return [];
+  return INITIAL_BEATS;
 };
 
-// Helper to safely write beats to localStorage
+// Helper to safely write lightweight beats to localStorage
 const saveBeatsToStorage = (beatsList: Beat[]) => {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(STORAGE_KEYS.BEATS, JSON.stringify(beatsList));
-  } catch (err) {
-    console.error('Error guardando beats en localStorage:', err);
+    const lightweightBeats = beatsList.map((b) => ({
+      ...b,
+      audioUrl: (b.audioUrl && !b.audioUrl.startsWith('data:audio/') && !b.audioUrl.startsWith('/uploads/')) ? b.audioUrl : '/subestimado.mp3',
+      audioPreviewUrl: (b.audioPreviewUrl && !b.audioPreviewUrl.startsWith('data:audio/') && !b.audioPreviewUrl.startsWith('/uploads/')) ? b.audioPreviewUrl : '/subestimado.mp3',
+      coverUrl: (b.coverUrl && b.coverUrl.length < 200000 && !b.coverUrl.startsWith('/uploads/')) ? b.coverUrl : '',
+    }));
+    localStorage.setItem(STORAGE_KEYS.BEATS, JSON.stringify(lightweightBeats));
+  } catch {
+    try {
+      localStorage.removeItem(STORAGE_KEYS.BEATS);
+    } catch {}
   }
 };
 

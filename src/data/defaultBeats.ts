@@ -115,6 +115,7 @@ export const INITIAL_BEATS: Beat[] = [
     audioPreviewUrl: "/subestimado.mp3",
     coverUrl: "",
     audioFileName: "el-subestimado-preview.mp3",
+    stemsFileUrl: "https://drive.google.com/drive/folders/1C6EsgU0hOQOFflauJX3QNhmmmQqi9zy1",
     previewDuration: 40,
     isWatermarkedPreview: true,
     previewWaveform: [
@@ -124,7 +125,7 @@ export const INITIAL_BEATS: Beat[] = [
       0.41, 0.42, 0.54, 0.41, 0.43, 0.42, 0.47, 0.5, 0.43, 0.4
     ],
     description: "Beat instrumental masterizado listo para grabación vocal profesional con contrato legal incluido.",
-    plays: 45,
+    plays: 46,
     likes: 0,
     isFeatured: true,
     isSoldExclusive: false,
@@ -134,6 +135,58 @@ export const INITIAL_BEATS: Beat[] = [
       media: "https://www.paypal.com/paypalme/samuhelman/45.00USD",
       exclusive: "https://www.paypal.com/paypalme/samuhelman/150.00USD",
       premium: "https://www.paypal.com/paypalme/samuhelman/250.00USD"
+    },
+    tierPrices: {
+      basic: 20,
+      media: 45,
+      exclusive: 150,
+      premium: 300
+    }
+  },
+  {
+    id: "beat-1787089249056",
+    title: "Cleopatra Hip Hop R&B Beat",
+    producer: "Samu helman en el mix / Samuel Helman",
+    genre: "Hip Hop",
+    subgenre: "R&B",
+    bpm: 99,
+    keyScale: "D MAJOR",
+    mood: [
+      "Agresivo",
+      "Oscuro"
+    ],
+    tags: [
+      "#HipHop",
+      "#R&B",
+      "#Egypcian",
+      "#Beat"
+    ],
+    duration: "3:04",
+    durationSeconds: 184,
+    coverUrl: "",
+    audioUrl: "/subestimado.mp3",
+    audioPreviewUrl: "/subestimado.mp3",
+    audioFileName: "Cleopatra_beat__Samuel_Helman.mp3",
+    stemsFileUrl: "https://drive.google.com/drive/folders/17ZAIXpNkUiOtMyYoTanw7oJIR2uJxrh0",
+    previewDuration: 40,
+    isWatermarkedPreview: true,
+    previewWaveform: [
+      0.15, 0.16, 0.36, 0.19, 0.24, 0.17, 0.17, 0.30, 0.15, 0.24,
+      0.21, 0.25, 0.30, 0.33, 0.34, 0.24, 0.32, 0.37, 0.26, 0.31,
+      0.26, 0.59, 0.37, 0.47, 0.44, 0.42, 0.67, 0.39, 0.49, 0.36,
+      0.34, 0.49, 0.35, 0.52, 0.39, 0.44, 0.69, 0.41, 0.48, 0.37
+    ],
+    description: "Beat instrumental masterizado listo para grabación vocal profesional con contrato legal incluido.",
+    plays: 1,
+    likes: 0,
+    isFeatured: true,
+    isSoldExclusive: false,
+    createdAt: "2026-08-18",
+    paypalLinks: {
+      basic: "https://www.paypal.com/paypalme/samuhelman/20.00USD",
+      media: "https://www.paypal.com/paypalme/samuhelman/45.00USD",
+      exclusive: "https://www.paypal.com/paypalme/samuhelman/150.00USD",
+      premium: "https://www.paypal.com/paypalme/samuhelman/300.00USD"
     },
     tierPrices: {
       basic: 20,

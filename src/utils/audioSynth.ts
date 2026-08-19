@@ -295,10 +295,8 @@ class AudioEngine {
         }
       };
 
-      audio.onerror = (e) => {
-        console.warn('Error al cargar la pista de audio MP3/WAV:', normalizedUrl, e);
-        if (normalizedUrl.startsWith('/uploads/') && normalizedUrl !== '/subestimado.mp3') {
-          console.info('Reintentando con pista de respaldo /subestimado.mp3...');
+      audio.onerror = () => {
+        if (normalizedUrl !== '/subestimado.mp3') {
           audio.src = '/subestimado.mp3';
           audio.load();
           audio.play().then(() => {
