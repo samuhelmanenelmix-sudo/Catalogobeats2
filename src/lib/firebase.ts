@@ -198,24 +198,25 @@ export async function deleteBeatFromFirestore(beatId: string): Promise<void> {
 }
 
 /**
- * Bulk seed or sync initial beats to Firestore if cloud database is empty.
+ * Bulk seed or sync initial beats to Firestore if missing.
  * Never writes large binary or Base64 payloads to Firestore.
  */
 export async function seedInitialBeatsIfEmpty(initialBeats: Beat[]): Promise<void> {
   try {
     const colRef = collection(db, BEATS_COLLECTION);
     const snapshot = await getDocs(colRef);
-    if (snapshot.empty && initialBeats.length > 0) {
-      console.log('Seeding initial beats to Firestore cloud database...');
-      for (const rawBeat of initialBeats) {
+    const existingIds = new Set(snapshot.docs.map((d) => d.id));
+
+    for (const rawBeat of initialBeats) {
+      if (!existingIds.has(rawBeat.id)) {
         const sanitized = sanitizeBeatForFirestore(rawBeat);
         const docRef = doc(db, BEATS_COLLECTION, sanitized.id);
-        await setDoc(docRef, sanitized);
+        await setDoc(docRef, sanitized, { merge: true });
+        console.log(`Synced new beat "${sanitized.title}" to Firestore cloud database.`);
       }
-      console.log('Firestore seed completed successfully with sanitized lightweight documents.');
     }
   } catch (error) {
-    console.warn('Could not auto-seed Firestore (non-fatal):', error);
+    console.warn('Could not auto-seed/sync Firestore (non-fatal):', error);
   }
 }
 
