@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   PlusCircle, 
   Settings, 
@@ -18,11 +18,19 @@ import {
   Check,
   Share2,
   Cloud,
-  Database
+  Database,
+  Play,
+  Pause,
+  Upload,
+  Volume2,
+  Radio,
+  FileAudio,
+  Loader2
 } from 'lucide-react';
 import { Beat, PaymentGatewaysConfig } from '../types';
 import { BeatCoverImage } from './BeatCoverImage';
 import { getBeatDirectUrl, getBeatSlug, copyToClipboard } from '../utils/beatLinks';
+import { audioEngine } from '../utils/audioSynth';
 
 interface AdminPanelProps {
   beats: Beat[];
@@ -65,6 +73,90 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const currentSelectedBeat = beats.find(b => b.id === selectedBeatForLink) || beats[0];
+
+  // Official Producer Voice Tag state & controls
+  const [isVoiceTagPlaying, setIsVoiceTagPlaying] = useState(false);
+  const [isUploadingTag, setIsUploadingTag] = useState(false);
+  const [tagUploadMsg, setTagUploadMsg] = useState<string | null>(null);
+  const tagAudioRef = useRef<HTMLAudioElement | null>(null);
+  const tagFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleTogglePlayTag = () => {
+    if (isVoiceTagPlaying) {
+      if (tagAudioRef.current) {
+        tagAudioRef.current.pause();
+        tagAudioRef.current.currentTime = 0;
+      }
+      setIsVoiceTagPlaying(false);
+    } else {
+      if (!tagAudioRef.current) {
+        tagAudioRef.current = new Audio('/uploads/producer-voice-tag.mp3');
+        tagAudioRef.current.volume = 0.75;
+        tagAudioRef.current.onended = () => setIsVoiceTagPlaying(false);
+        tagAudioRef.current.onerror = () => {
+          if (tagAudioRef.current && !tagAudioRef.current.src.includes('/producer-voice-tag.mp3')) {
+            tagAudioRef.current.src = '/producer-voice-tag.mp3';
+            tagAudioRef.current.play().catch(() => {});
+          } else {
+            setIsVoiceTagPlaying(false);
+          }
+        };
+      }
+      tagAudioRef.current.currentTime = 0;
+      tagAudioRef.current.play().then(() => {
+        setIsVoiceTagPlaying(true);
+      }).catch(err => {
+        console.warn('Cannot play tag audio:', err);
+        setIsVoiceTagPlaying(false);
+      });
+    }
+  };
+
+  const handleTagFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingTag(true);
+    setTagUploadMsg(null);
+
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const fileBase64 = reader.result as string;
+        const res = await fetch('/api/voice-tag/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileBase64,
+            fileName: file.name
+          })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+          setTagUploadMsg('✓ ¡Audio tag oficial de Samu Helman actualizado y aplicado a todos los beats!');
+          const updatedSrc = `/uploads/producer-voice-tag.mp3?t=${Date.now()}`;
+          audioEngine.updateVoiceTagUrl(updatedSrc);
+          if (tagAudioRef.current) {
+            tagAudioRef.current.src = updatedSrc;
+            tagAudioRef.current.load();
+          }
+        } else {
+          setTagUploadMsg('Error al guardar audio tag: ' + (data.error || 'Verifica el archivo'));
+        }
+      } catch (err: any) {
+        setTagUploadMsg('Error al subir audio tag');
+      } finally {
+        setIsUploadingTag(false);
+        setTimeout(() => setTagUploadMsg(null), 5000);
+      }
+    };
+    reader.onerror = () => {
+      setIsUploadingTag(false);
+      setTagUploadMsg('Error al leer el archivo de audio');
+    };
+    reader.readAsDataURL(file);
+  };
 
   return (
     <div className="bg-[#030A14] border border-[#00F0FF]/35 rounded-3xl p-5 sm:p-6 mb-8 text-[#E0F2FE] shadow-[0_0_30px_rgba(0,240,255,0.12)] relative overflow-hidden">
@@ -145,6 +237,91 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           </button>
         </div>
 
+      </div>
+
+      {/* Official Producer Voice Tag Manager Strip */}
+      <div className="mt-5 p-4 rounded-2xl bg-[#020710] border border-[#00F0FF]/35 flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#00F0FF]/15 border border-[#00F0FF]/40 flex items-center justify-center shrink-0 mt-0.5 text-[#00F0FF]">
+            <FileAudio className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-mono font-bold uppercase tracking-wider text-white">
+                Audio Tag Oficial del Productor (Fijo)
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#FF5500]/15 border border-[#FF5500]/50 text-[#FF5500]">
+                "Samu Helman en el mix"
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-950/60 border border-emerald-500/50 text-emerald-300">
+                ● 100% Audio Real (Sin IA)
+              </span>
+            </div>
+            <p className="text-xs text-sky-200/70 mt-1 max-w-2xl leading-relaxed">
+              Voz de marca personal fija aplicada en todo el catálogo. Suena automáticamente cada 15-20s en el reproductor con atenuación suave de pista (ducking de estudio) y se fusiona en los clips de muestra de todos los beats próximos a subir.
+            </p>
+            {tagUploadMsg && (
+              <div className="mt-2 text-xs font-mono font-medium text-emerald-400 flex items-center gap-1.5 animate-fadeIn">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>{tagUploadMsg}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 shrink-0">
+          {/* Test play button */}
+          <button
+            id="admin-btn-test-tag"
+            onClick={handleTogglePlayTag}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-mono font-bold border transition ${
+              isVoiceTagPlaying 
+                ? 'bg-[#FF5500] text-black border-[#FF5500] shadow-[0_0_15px_rgba(255,85,0,0.5)]' 
+                : 'bg-[#051525] hover:bg-[#0A223D] border-[#00F0FF]/30 text-[#00F0FF]'
+            }`}
+            title="Escuchar audio tag oficial"
+          >
+            {isVoiceTagPlaying ? (
+              <>
+                <Pause className="w-3.5 h-3.5" />
+                <span>Detener Tag</span>
+              </>
+            ) : (
+              <>
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Escuchar Tag</span>
+              </>
+            )}
+          </button>
+
+          {/* Upload / Replace tag button */}
+          <input 
+            type="file" 
+            ref={tagFileInputRef} 
+            onChange={handleTagFileSelect} 
+            accept="audio/*,.mp3,.wav,.m4a,.aac" 
+            className="hidden" 
+          />
+          <button
+            id="admin-btn-upload-tag"
+            onClick={() => tagFileInputRef.current?.click()}
+            disabled={isUploadingTag}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-mono font-bold bg-[#00F0FF]/15 hover:bg-[#00F0FF]/25 border border-[#00F0FF]/50 text-[#00F0FF] transition shadow-[0_0_12px_rgba(0,240,255,0.15)] active:scale-95 disabled:opacity-50"
+            title="Subir archivo de audio para el tag (.mp3 o .wav)"
+          >
+            {isUploadingTag ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Subiendo Tag...</span>
+              </>
+            ) : (
+              <>
+                <Upload className="w-3.5 h-3.5" />
+                <span>Reemplazar / Subir Tag (.mp3 / .wav)</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Quick Beat Inventory Strip */}

@@ -508,6 +508,77 @@ app.post('/api/upload-audio', (req, res) => {
 });
 
 // ----------------------------------------------------
+// 2.12 API: POST /api/voice-tag/upload & GET /api/voice-tag (Official Producer Voice Tag)
+// ----------------------------------------------------
+const VOICE_TAG_FILE = path.join(UPLOADS_DIR, 'producer-voice-tag.mp3');
+
+app.get('/api/voice-tag', (req, res) => {
+  const exists = fs.existsSync(VOICE_TAG_FILE) || fs.existsSync(path.join(process.cwd(), 'public', 'producer-voice-tag.mp3'));
+  res.json({
+    success: true,
+    hasVoiceTag: exists,
+    url: '/uploads/producer-voice-tag.mp3',
+    fallbackUrl: '/producer-voice-tag.mp3',
+    producerName: 'Samu Helman en el mix'
+  });
+});
+
+app.get('/api/voice-tag/audio', (req, res) => {
+  let tagPath = VOICE_TAG_FILE;
+  if (!fs.existsSync(tagPath)) {
+    tagPath = path.join(process.cwd(), 'public', 'producer-voice-tag.mp3');
+  }
+  if (!fs.existsSync(tagPath)) {
+    return res.status(404).json({ error: 'Audio tag no encontrado' });
+  }
+  res.setHeader('Content-Type', 'audio/mpeg');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  fs.createReadStream(tagPath).pipe(res);
+});
+
+app.post('/api/voice-tag/upload', (req, res) => {
+  try {
+    const { fileBase64, fileName } = req.body;
+    if (!fileBase64 || typeof fileBase64 !== 'string') {
+      return res.status(400).json({ error: 'Se requiere el archivo de audio base64' });
+    }
+
+    const commaIndex = fileBase64.indexOf(',');
+    const rawBase64 = commaIndex !== -1 ? fileBase64.substring(commaIndex + 1) : fileBase64;
+    const buffer = Buffer.from(rawBase64, 'base64');
+
+    if (buffer.length === 0) {
+      return res.status(400).json({ error: 'El archivo de audio está vacío' });
+    }
+
+    // Save directly to uploads directory as the permanent producer voice tag
+    fs.writeFileSync(VOICE_TAG_FILE, buffer);
+
+    // Also sync to public/ and dist/
+    const publicDir = path.join(process.cwd(), 'public');
+    if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
+    fs.writeFileSync(path.join(publicDir, 'producer-voice-tag.mp3'), buffer);
+
+    const distDir = path.join(process.cwd(), 'dist');
+    if (fs.existsSync(distDir)) {
+      fs.writeFileSync(path.join(distDir, 'producer-voice-tag.mp3'), buffer);
+    }
+
+    console.log(`[Voice Tag Upload] Official producer voice tag updated (${buffer.length} bytes) by Samu Helman`);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Audio tag oficial de Samu Helman guardado y activado para todos los beats',
+      url: '/uploads/producer-voice-tag.mp3',
+      size: buffer.length
+    });
+  } catch (err: any) {
+    console.error('Error guardando audio tag:', err);
+    return res.status(500).json({ error: 'Error del servidor al guardar audio tag' });
+  }
+});
+
+// ----------------------------------------------------
 // 2.15 API: POST /api/upload-image (Image Cover Upload to Disk)
 // ----------------------------------------------------
 app.post('/api/upload-image', (req, res) => {

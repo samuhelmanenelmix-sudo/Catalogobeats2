@@ -10,19 +10,20 @@ import {
   CreditCard,
   Lock,
   Key,
-  Cloud
+  Cloud,
+  Instagram
 } from 'lucide-react';
 import { PaymentGatewaysConfig } from '../types';
 import { PaypalLogo } from './PaypalLogo';
 
 interface NavbarProps {
   isAdminMode: boolean;
+  isStudioSession: boolean;
   onToggleAdminMode: () => void;
   onOpenNewBeatModal: () => void;
   onOpenPaymentSettings: () => void;
   onOpenPurchasesModal: () => void;
   onOpenCodeArchitecture: () => void;
-  onOpenProducerLogin?: () => void;
   purchasedCount: number;
   paymentConfig: PaymentGatewaysConfig;
   searchQuery: string;
@@ -32,12 +33,12 @@ interface NavbarProps {
 
 export const Navbar: React.FC<NavbarProps> = ({
   isAdminMode,
+  isStudioSession,
   onToggleAdminMode,
   onOpenNewBeatModal,
   onOpenPaymentSettings,
   onOpenPurchasesModal,
   onOpenCodeArchitecture,
-  onOpenProducerLogin,
   purchasedCount,
   paymentConfig,
   searchQuery,
@@ -52,13 +53,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Logo & Producer Brand */}
           <div className="flex items-center gap-2.5 shrink-0">
             <div 
-              onClick={() => {
-                if (!isAdminMode && onOpenProducerLogin) {
-                  onOpenProducerLogin();
-                }
-              }}
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-[#030A14] border border-[#00F0FF]/40 flex items-center justify-center text-[#00F0FF] cursor-pointer hover:border-[#00F0FF] transition shadow-[0_0_10px_rgba(0,240,255,0.2)]"
-              title={isAdminMode ? 'Panel de Administración Activo' : 'Samu Helman en el mix'}
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-[#030A14] border border-[#00F0FF]/40 flex items-center justify-center text-[#00F0FF] shadow-[0_0_10px_rgba(0,240,255,0.2)] select-none"
+              title="Samu Helman en el mix"
             >
               <Music className="w-4 h-4 sm:w-4.5 sm:h-4.5 drop-shadow-[0_0_6px_#00F0FF]" />
             </div>
@@ -73,26 +69,26 @@ export const Navbar: React.FC<NavbarProps> = ({
               {/* PayPal Trust Badge */}
               <div className="hidden md:flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#002C66]/50 border border-[#00F0FF]/30 text-[10px] font-mono text-sky-200">
                 <PaypalLogo className="w-3 h-3" />
-                <span>PayPal Verified</span>
+                <span>PayPal Verificado</span>
               </div>
 
               {/* Real-time Cloud Sync Badge */}
               <div 
-                className={`hidden lg:flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-mono ${
+                className={`hidden lg:flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-[10px] font-mono ${
                   isCloudSynced 
-                    ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300' 
-                    : 'bg-amber-950/40 border-amber-500/40 text-amber-300'
+                    ? 'bg-[#021c0e] border-[#00C853]/50 text-[#00E676] shadow-[0_0_10px_rgba(0,200,83,0.25)]' 
+                    : 'bg-[#260e02] border-[#FF5500]/50 text-[#FF5500]'
                 }`}
                 title={isCloudSynced ? 'Catálogo sincronizado en la nube (Firestore en tiempo real)' : 'Conectando a base de datos en la nube...'}
               >
-                <Cloud className={`w-3 h-3 ${isCloudSynced ? 'text-emerald-400' : 'text-amber-400 animate-pulse'}`} />
+                <Cloud className={`w-3 h-3 ${isCloudSynced ? 'text-[#00E676]' : 'text-[#FF5500] animate-pulse'}`} />
                 <span>{isCloudSynced ? 'Nube en Vivo' : 'Conectando...'}</span>
               </div>
 
-              {/* Admin Active Pill */}
-              {isAdminMode && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#00F0FF]/15 border border-[#00F0FF]/50 text-[10px] font-mono text-[#00F0FF] font-bold uppercase tracking-wider animate-pulse">
-                  Panel Productor
+              {/* Admin Active Pill: Only inside Google AI Studio */}
+              {isStudioSession && isAdminMode && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#FF5500]/15 border border-[#FF5500]/50 text-[10px] font-mono text-[#FF5500] font-bold uppercase tracking-wider animate-pulse shadow-[0_0_8px_rgba(255,85,0,0.3)]">
+                  Google Studio AI • Sesión Activa
                 </span>
               )}
             </div>
@@ -116,6 +112,20 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Actions & Public / Admin Controls */}
           <div className="flex items-center gap-2">
             
+            {/* Sígueme en Instagram Button */}
+            <a
+              id="btn-instagram-nav"
+              href="https://www.instagram.com/samuelhelmann?igsi=MXYyOTRyeGRxa2dldg=="
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-pink-200 bg-gradient-to-r from-[#833ab4]/20 via-[#fd1d1d]/20 to-[#fcb045]/20 border border-pink-500/40 hover:border-pink-400 hover:text-white hover:shadow-[0_0_12px_rgba(236,72,153,0.3)] transition active:scale-95 font-mono"
+              title="Sígueme en Instagram @samuelhelmann"
+            >
+              <Instagram className="w-3.5 h-3.5 text-pink-400" />
+              <span className="hidden sm:inline">Sígueme en Instagram</span>
+              <span className="sm:hidden">Instagram</span>
+            </a>
+
             {/* My Licenses / Purchases button (Visible for clients who purchased) */}
             <button
               id="btn-my-licenses"
@@ -132,65 +142,65 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </button>
 
-            {/* ONLY SHOWN TO ADMIN WHEN LOGGED IN / ?admin=true */}
-            {isAdminMode ? (
-              <>
-                {/* Code Architecture button */}
-                <button
-                  id="btn-code-architecture"
-                  onClick={onOpenCodeArchitecture}
-                  className="hidden lg:flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg text-[#00F0FF] bg-[#00F0FF]/10 border border-[#00F0FF]/30 hover:bg-[#00F0FF]/20 transition font-mono"
-                  title="Ver código y arquitectura Full-Stack"
-                >
-                  <span className="text-xs">📦</span>
-                  <span className="hidden xl:inline">Código</span>
-                </button>
+            {/* EXCLUSIVELY SHOWN INSIDE GOOGLE AI STUDIO SESSION */}
+            {isStudioSession ? (
+              isAdminMode ? (
+                <>
+                  {/* Code Architecture button */}
+                  <button
+                    id="btn-code-architecture"
+                    onClick={onOpenCodeArchitecture}
+                    className="hidden lg:flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg text-[#00F0FF] bg-[#00F0FF]/10 border border-[#00F0FF]/30 hover:bg-[#00F0FF]/20 transition font-mono"
+                    title="Ver código y arquitectura Full-Stack"
+                  >
+                    <span className="text-xs">📦</span>
+                    <span className="hidden xl:inline">Código</span>
+                  </button>
 
-                {/* Subir Beat */}
+                  {/* Subir Beat (Naranja Oscuro Neón) */}
+                  <button
+                    id="btn-add-beat-nav"
+                    onClick={onOpenNewBeatModal}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg text-black bg-[#FF5500] hover:bg-[#ff6a1a] shadow-[0_0_16px_rgba(255,85,0,0.55)] transition active:scale-95 font-mono"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Subir Beat</span>
+                  </button>
+
+                  {/* Pasarelas de Pago */}
+                  <button
+                    id="btn-payment-settings"
+                    onClick={onOpenPaymentSettings}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg text-[#E0F2FE] bg-[#050C16] border border-[#00F0FF]/30 hover:bg-[#0A192F] hover:text-[#00F0FF] transition font-mono"
+                    title="Configurar Pasarelas y Enlaces PayPal"
+                  >
+                    <CreditCard className="w-3.5 h-3.5 text-[#00F0FF]" />
+                    <span className="hidden lg:inline">Medios de Pago</span>
+                  </button>
+
+                  {/* Studio Preview Toggle: Vista Cliente */}
+                  <button
+                    id="btn-toggle-client-preview"
+                    onClick={onToggleAdminMode}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-[#051525] border border-[#00F0FF]/30 text-[#00F0FF] hover:bg-[#00F0FF]/15 transition font-mono"
+                    title="Alternar a vista de cliente para previsualizar la tienda como un comprador"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-[#00F0FF]" />
+                    <span className="hidden sm:inline">Vista Cliente</span>
+                  </button>
+                </>
+              ) : (
+                /* In studio session, if client view is active, allow returning to producer mode */
                 <button
-                  id="btn-add-beat-nav"
-                  onClick={onOpenNewBeatModal}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg text-black bg-[#00F0FF] hover:bg-[#38BDF8] shadow-[0_0_15px_rgba(0,240,255,0.4)] transition active:scale-95 font-mono"
+                  id="btn-return-admin-mode"
+                  onClick={onToggleAdminMode}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold uppercase tracking-wider rounded-lg text-black bg-[#FF5500] hover:bg-[#ff6a1a] shadow-[0_0_15px_rgba(255,85,0,0.4)] transition active:scale-95 font-mono"
+                  title="Activar herramientas de productor"
                 >
                   <PlusCircle className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Subir Beat</span>
+                  <span>Modo Productor</span>
                 </button>
-
-                {/* Pasarelas de Pago */}
-                <button
-                  id="btn-payment-settings"
-                  onClick={onOpenPaymentSettings}
-                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg text-[#E0F2FE] bg-[#050C16] border border-[#00F0FF]/30 hover:bg-[#0A192F] hover:text-[#00F0FF] transition font-mono"
-                  title="Configurar Pasarelas y Enlaces PayPal"
-                >
-                  <CreditCard className="w-3.5 h-3.5 text-[#00F0FF]" />
-                  <span className="hidden lg:inline">Medios de Pago</span>
-                </button>
-
-                {/* Cambiar Clave Admin */}
-                {onOpenProducerLogin && (
-                  <button
-                    id="btn-change-password-nav"
-                    onClick={onOpenProducerLogin}
-                    className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-lg text-sky-200 bg-[#050C16] border border-[#00F0FF]/25 hover:border-[#00F0FF] hover:text-white transition font-mono"
-                    title="Cambiar contraseña de administración"
-                  >
-                    <Key className="w-3.5 h-3.5 text-[#00F0FF]" />
-                    <span className="hidden xl:inline">Clave</span>
-                  </button>
-                )}
-
-                {/* Exit Admin Button */}
-                <button
-                  id="btn-exit-admin-mode"
-                  onClick={onToggleAdminMode}
-                  className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-red-950/40 border border-red-500/40 text-red-300 hover:bg-red-900/50 hover:text-white transition font-mono"
-                  title="Salir de la vista de administración"
-                >
-                  <Settings className="w-3.5 h-3.5 text-red-400" />
-                  <span>Salir Admin</span>
-                </button>
-              </>
+              )
             ) : null}
 
           </div>

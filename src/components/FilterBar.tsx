@@ -47,7 +47,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               id="filter-bpm"
               value={selectedBpmRange}
               onChange={(e) => onSelectBpmRange(e.target.value)}
-              className="appearance-none bg-[#000000] border border-[#00F0FF]/25 rounded-xl px-3 py-1.5 pr-8 text-xs text-sky-200 hover:border-[#00F0FF]/60 focus:outline-none focus:border-[#00F0FF] transition cursor-pointer"
+              className="appearance-none bg-[#000000] border border-[#00F0FF]/25 rounded-xl px-3 py-1.5 pr-8 text-xs text-sky-200 hover:border-[#FF5500]/60 focus:outline-none focus:border-[#FF5500] transition cursor-pointer"
             >
               <option value="ALL">Tempo (BPM): Todos</option>
               <option value="SLOW">Lento (&lt; 90 BPM)</option>
@@ -55,7 +55,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
               <option value="UPTEMPO">Rápido (125 - 145 BPM)</option>
               <option value="FAST">Ultra Rápido (&gt; 145 BPM)</option>
             </select>
-            <Gauge className="w-3.5 h-3.5 text-sky-400/60 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Gauge className="w-3.5 h-3.5 text-[#FF5500] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
 
           {/* Musical Key Filter */}
@@ -73,7 +73,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                 </option>
               ))}
             </select>
-            <Music2 className="w-3.5 h-3.5 text-sky-400/60 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Music2 className="w-3.5 h-3.5 text-[#00F0FF] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
 
           {/* Mood Filter */}
@@ -83,7 +83,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                 id="filter-mood"
                 value={selectedMood}
                 onChange={(e) => onSelectMood(e.target.value)}
-                className="appearance-none bg-[#000000] border border-[#00F0FF]/25 rounded-xl px-3 py-1.5 pr-8 text-xs text-sky-200 hover:border-[#00F0FF]/60 focus:outline-none focus:border-[#00F0FF] transition cursor-pointer"
+                className="appearance-none bg-[#000000] border border-[#00F0FF]/25 rounded-xl px-3 py-1.5 pr-8 text-xs text-sky-200 hover:border-[#00E676]/60 focus:outline-none focus:border-[#00E676] transition cursor-pointer"
               >
                 <option value="ALL">Mood / Vibras: Todas</option>
                 {availableMoods.map((m) => (
@@ -92,7 +92,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
                   </option>
                 ))}
               </select>
-              <Sparkles className="w-3.5 h-3.5 text-sky-400/60 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Sparkles className="w-3.5 h-3.5 text-[#00E676] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
           )}
 
@@ -101,7 +101,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({
             <button
               id="btn-reset-filters"
               onClick={onResetFilters}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500/25 text-xs font-medium transition"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-[#FF5500]/15 text-[#FF5500] border border-[#FF5500]/40 hover:bg-[#FF5500]/25 text-xs font-medium transition shadow-[0_0_10px_rgba(255,85,0,0.2)]"
             >
               <X className="w-3 h-3" />
               <span>Limpiar filtros</span>

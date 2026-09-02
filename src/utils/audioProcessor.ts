@@ -110,22 +110,22 @@ function renderWatermarkAtTime(
 ) {
   const now = targetTime;
 
-  // 1. Chime / Signature Acoustic Ping
+  // 1. Sensual Studio Sparkle & Harmonic Cue
   const osc1 = ctx.createOscillator();
   const osc2 = ctx.createOscillator();
   const chimeGain = ctx.createGain();
 
   osc1.type = 'sine';
-  osc1.frequency.setValueAtTime(1046.50, now); // C6
-  osc1.frequency.exponentialRampToValueAtTime(523.25, now + 0.35); // C5
+  osc1.frequency.setValueAtTime(1174.66, now); // D6
+  osc1.frequency.exponentialRampToValueAtTime(880, now + 0.35); // A5
 
-  osc2.type = 'triangle';
-  osc2.frequency.setValueAtTime(1318.51, now); // E6
-  osc2.frequency.exponentialRampToValueAtTime(659.25, now + 0.35); // E5
+  osc2.type = 'sine';
+  osc2.frequency.setValueAtTime(587.33, now); // D5
+  osc2.frequency.exponentialRampToValueAtTime(440, now + 0.35);
 
   chimeGain.gain.setValueAtTime(0, now);
-  chimeGain.gain.linearRampToValueAtTime(0.45, now + 0.05);
-  chimeGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+  chimeGain.gain.linearRampToValueAtTime(0.28, now + 0.05);
+  chimeGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.55);
 
   osc1.connect(chimeGain);
   osc2.connect(chimeGain);
@@ -136,34 +136,32 @@ function renderWatermarkAtTime(
   osc2.start(now);
   osc2.stop(now + 0.55);
 
-  // 2. Robotic / Formant Vocoder "Voice Tag" simulation sweep
-  // Simulates "Samu Helman en el mix" watermark resonance
-  const formantOsc = ctx.createOscillator();
-  const formantFilter = ctx.createBiquadFilter();
-  const formantGain = ctx.createGain();
+  // 2. Velvety, warm harmonic whisper tag resonance (Soft, non-robotic acoustic bed)
+  const warmPadOsc = ctx.createOscillator();
+  const warmFilter = ctx.createBiquadFilter();
+  const warmGain = ctx.createGain();
 
-  formantOsc.type = 'sawtooth';
-  formantOsc.frequency.setValueAtTime(160, now + 0.15);
-  formantOsc.frequency.setValueAtTime(190, now + 0.45);
-  formantOsc.frequency.setValueAtTime(140, now + 0.75);
+  warmPadOsc.type = 'sine';
+  warmPadOsc.frequency.setValueAtTime(440, now + 0.12);
+  warmPadOsc.frequency.exponentialRampToValueAtTime(349.23, now + 0.45); // F4
+  warmPadOsc.frequency.exponentialRampToValueAtTime(261.63, now + 0.75); // C4
 
-  formantFilter.type = 'bandpass';
-  formantFilter.frequency.setValueAtTime(1200, now + 0.15);
-  formantFilter.frequency.exponentialRampToValueAtTime(2400, now + 0.5);
-  formantFilter.frequency.exponentialRampToValueAtTime(800, now + 0.9);
-  formantFilter.Q.value = 4.5;
+  warmFilter.type = 'lowpass';
+  warmFilter.frequency.setValueAtTime(1400, now + 0.12);
+  warmFilter.frequency.exponentialRampToValueAtTime(600, now + 0.8);
+  warmFilter.Q.value = 1.2;
 
-  formantGain.gain.setValueAtTime(0, now + 0.15);
-  formantGain.gain.linearRampToValueAtTime(0.35, now + 0.25);
-  formantGain.gain.setValueAtTime(0.35, now + 0.75);
-  formantGain.gain.exponentialRampToValueAtTime(0.001, now + 1.1);
+  warmGain.gain.setValueAtTime(0, now + 0.12);
+  warmGain.gain.linearRampToValueAtTime(0.22, now + 0.22);
+  warmGain.gain.setValueAtTime(0.20, now + 0.6);
+  warmGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.95);
 
-  formantOsc.connect(formantFilter);
-  formantFilter.connect(formantGain);
-  formantGain.connect(ctx.destination);
+  warmPadOsc.connect(warmFilter);
+  warmFilter.connect(warmGain);
+  warmGain.connect(ctx.destination);
 
-  formantOsc.start(now + 0.15);
-  formantOsc.stop(now + 1.15);
+  warmPadOsc.start(now + 0.12);
+  warmPadOsc.stop(now + 0.95);
 }
 
 /**
@@ -208,6 +206,22 @@ export async function processMasterWavToPreviewClip(
   const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
   const tempCtx = new AudioCtx();
   const decodedBuffer = await tempCtx.decodeAudioData(arrayBuffer);
+
+  // Attempt to load official producer voice tag audio buffer
+  let voiceTagBuffer: AudioBuffer | null = null;
+  try {
+    const tagRes = await fetch('/uploads/producer-voice-tag.mp3').catch(() => fetch('/producer-voice-tag.mp3'));
+    if (tagRes && tagRes.ok) {
+      const tagArrayBuffer = await tagRes.arrayBuffer();
+      // Decode with a temporary clone context
+      const tagCtx = new AudioCtx();
+      voiceTagBuffer = await tagCtx.decodeAudioData(tagArrayBuffer);
+      await tagCtx.close();
+    }
+  } catch (tagErr) {
+    console.warn('Voice tag audio buffer load fallback:', tagErr);
+  }
+
   await tempCtx.close();
 
   // Determine actual clip duration (max targetDurationSeconds, e.g. 40s)
@@ -263,14 +277,31 @@ export async function processMasterWavToPreviewClip(
   const watermarkIntervals: number[] = [];
   for (let t = 0; t < actualDuration - 2; t += intervalSeconds) {
     watermarkIntervals.push(t);
-    // Subtle ducking of the beat volume during watermark injection
-    masterGain.gain.setValueAtTime(0.9, Math.max(0, t - 0.05));
-    masterGain.gain.linearRampToValueAtTime(0.45, t + 0.1);
-    masterGain.gain.linearRampToValueAtTime(0.45, t + 0.85);
-    masterGain.gain.linearRampToValueAtTime(0.9, t + 1.2);
 
-    // Render audible acoustic watermark tag at this timestamp
-    renderWatermarkAtTime(offlineCtx, t, producerName);
+    if (voiceTagBuffer) {
+      // 1. Gentle musical ducking (~18-20% drop) so the beat remains full and energetic without being obscured
+      masterGain.gain.setValueAtTime(0.95, Math.max(0, t - 0.05));
+      masterGain.gain.linearRampToValueAtTime(0.78, t + 0.12);
+      masterGain.gain.linearRampToValueAtTime(0.78, t + 2.2);
+      masterGain.gain.linearRampToValueAtTime(0.95, t + 2.7);
+
+      // 2. Play the actual producer voice tag audio buffer at 30% reduced volume (0.75 instead of 1.15)
+      const tagSource = offlineCtx.createBufferSource();
+      tagSource.buffer = voiceTagBuffer;
+      const tagGain = offlineCtx.createGain();
+      tagGain.gain.setValueAtTime(0.75, t);
+      tagSource.connect(tagGain);
+      tagGain.connect(offlineCtx.destination);
+      tagSource.start(t);
+    } else {
+      // Fallback ducking and acoustic watermark cue
+      masterGain.gain.setValueAtTime(0.9, Math.max(0, t - 0.05));
+      masterGain.gain.linearRampToValueAtTime(0.45, t + 0.1);
+      masterGain.gain.linearRampToValueAtTime(0.45, t + 0.85);
+      masterGain.gain.linearRampToValueAtTime(0.9, t + 1.2);
+
+      renderWatermarkAtTime(offlineCtx, t, producerName);
+    }
   }
 
   // Connect beat source graph

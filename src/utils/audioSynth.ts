@@ -45,6 +45,7 @@ export function normalizeAudioUrl(rawUrl?: string): string {
 
 class AudioEngine {
   private audioElement: HTMLAudioElement | null = null;
+  private voiceTagAudio: HTMLAudioElement | null = null;
   private isPlaying = false;
   private volume = 0.8;
   private currentBeatId: string | null = null;
@@ -57,9 +58,41 @@ class AudioEngine {
   private hasVoiceTag = true;
   private lastWatermarkInterval = -1;
   private synthAudioCtx: AudioContext | null = null;
+  private voiceTagSrc = '/uploads/producer-voice-tag.mp3';
 
   constructor() {
-    // Client-side initialization
+    // Pre-initialize voice tag audio element with cache buster fallback
+    if (typeof window !== 'undefined') {
+      try {
+        this.initVoiceTagAudio();
+      } catch (e) {
+        console.warn('Voice tag init:', e);
+      }
+    }
+  }
+
+  private initVoiceTagAudio() {
+    try {
+      this.voiceTagAudio = new Audio();
+      this.voiceTagAudio.preload = 'auto';
+      // Try primary upload path, fallback to public root
+      this.voiceTagAudio.src = this.voiceTagSrc;
+      this.voiceTagAudio.onerror = () => {
+        if (this.voiceTagAudio && this.voiceTagAudio.src.includes('/uploads/')) {
+          this.voiceTagAudio.src = '/producer-voice-tag.mp3';
+        }
+      };
+    } catch {
+      // Audio element not supported
+    }
+  }
+
+  public updateVoiceTagUrl(newUrl: string) {
+    this.voiceTagSrc = newUrl;
+    if (this.voiceTagAudio) {
+      this.voiceTagAudio.src = newUrl;
+      this.voiceTagAudio.load();
+    }
   }
 
   public setCallbacks(
@@ -113,63 +146,67 @@ class AudioEngine {
   }
 
   /**
-   * Triggers the audible producer watermark rotating every 15 seconds:
-   * 1. Plays an acoustic producer ping/chime via Web Audio API.
-   * 2. Overlays the rotating voice tag ("Samu Helman en el mix", "Samu Helman en el beat").
+   * Triggers the official producer audio watermark rotating every 15-20 seconds:
+   * 1. Overlays the real recorded producer audio tag ("Samu Helman en el mix").
+   * 2. Ducks the beat track volume down smoothly during tag playback for studio clarity.
+   * 3. Completely replaces any previous AI/SpeechSynthesis voice generation.
    */
   private triggerRotatingWatermark(intervalIndex: number) {
     if (!this.hasVoiceTag || !this.isPlaying) return;
 
     try {
-      // 1. Play subtle signature chime overlay
-      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (AudioContextClass) {
-        if (!this.synthAudioCtx || this.synthAudioCtx.state === 'closed') {
-          this.synthAudioCtx = new AudioContextClass();
-        }
-        if (this.synthAudioCtx.state === 'suspended') {
-          this.synthAudioCtx.resume();
-        }
+      // 1. Gentle studio ducking: beat volume dips only slightly (~15-20%) so the music keeps its energy, bass and rhythm
+      const originalVolume = this.volume;
+      const duckedVolume = Math.max(0.15, originalVolume * 0.82);
 
-        const now = this.synthAudioCtx.currentTime;
-        const osc = this.synthAudioCtx.createOscillator();
-        const gain = this.synthAudioCtx.createGain();
-
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, now); // A5
-        osc.frequency.exponentialRampToValueAtTime(440, now + 0.3); // A4
-
-        const masterVol = Math.max(0.05, Math.min(0.35, this.volume * 0.3));
-        gain.gain.setValueAtTime(0.001, now);
-        gain.gain.linearRampToValueAtTime(masterVol, now + 0.04);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
-
-        osc.connect(gain);
-        gain.connect(this.synthAudioCtx.destination);
-        osc.start(now);
-        osc.stop(now + 0.45);
+      if (this.audioElement) {
+        this.audioElement.volume = duckedVolume;
       }
 
-      // 2. Play rotating spoken voice tag if supported in the browser
-      if ('speechSynthesis' in window) {
-        const phrases = [
-          'Samu Helman en el mix',
-          'Samu Helman en el beat',
-          'Samu Helman en el mix'
-        ];
-        const phrase = phrases[intervalIndex % phrases.length];
-        const utterance = new SpeechSynthesisUtterance(phrase);
-        utterance.lang = 'es-ES';
-        utterance.pitch = 1.05;
-        utterance.rate = 1.05;
-        utterance.volume = Math.max(0.2, Math.min(1.0, this.volume * 0.95));
+      // 2. Play the official producer voice tag audio file at 30% reduced volume
+      if (!this.voiceTagAudio) {
+        this.initVoiceTagAudio();
+      }
 
-        // Avoid speech queue backlog
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utterance);
+      if (this.voiceTagAudio) {
+        this.voiceTagAudio.currentTime = 0;
+        // 30% reduction from previous volume level to sit smoothly in the mix
+        this.voiceTagAudio.volume = Math.max(0.2, Math.min(0.75, originalVolume * 0.70));
+
+        const restoreBeatVolume = () => {
+          if (this.audioElement && this.isPlaying) {
+            // Smoothly restore volume
+            this.audioElement.volume = this.volume;
+          }
+        };
+
+        this.voiceTagAudio.onended = restoreBeatVolume;
+        this.voiceTagAudio.onerror = () => {
+          // If primary path failed, try fallback
+          if (this.voiceTagAudio && !this.voiceTagAudio.src.includes('/producer-voice-tag.mp3')) {
+            this.voiceTagAudio.src = '/producer-voice-tag.mp3';
+            this.voiceTagAudio.play().catch(() => {});
+          }
+          setTimeout(restoreBeatVolume, 2500);
+        };
+
+        const playPromise = this.voiceTagAudio.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((err) => {
+            console.warn('Voice tag audio play deferred by browser:', err);
+            // Restore volume if prevented
+            setTimeout(restoreBeatVolume, 1500);
+          });
+        }
+
+        // Safety fallback timer to ensure beat volume is ALWAYS restored even if onended doesn't fire
+        setTimeout(restoreBeatVolume, 3200);
       }
     } catch (e) {
-      console.warn('Non-fatal watermark overlay error:', e);
+      console.warn('Non-fatal producer voice tag error:', e);
+      if (this.audioElement) {
+        this.audioElement.volume = this.volume;
+      }
     }
   }
 

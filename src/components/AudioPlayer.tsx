@@ -265,22 +265,28 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
             <div className="w-full flex items-center justify-between text-[11px] font-mono text-sky-300/60 px-1 mt-1 hidden sm:flex">
               <span>{formatTime(currentTime)}</span>
               
-              {/* Simulated Waveform Visualizer */}
+              {/* Simulated Tri-Neon Waveform Visualizer */}
               <div className="flex items-center gap-0.5 mx-4 flex-1 justify-center max-w-xs h-3">
                 {Array.from({ length: 28 }).map((_, i) => {
                   const active = (i / 28) <= (currentTime / duration);
                   const randomHeight = ((i * 7 + 13) % 9) + 4;
+                  
+                  // Tri-Neon Spectral palette
+                  const neonColor = i < 10 
+                    ? '#00F0FF' 
+                    : i < 19 
+                    ? '#FF5500' 
+                    : '#00E676';
+
                   return (
                     <div
                       key={i}
-                      style={{ height: `${randomHeight}px` }}
-                      className={`w-1 rounded-full transition-all duration-150 ${
-                        active 
-                          ? isPlaying 
-                            ? 'bg-[#00F0FF] shadow-[0_0_4px_#00F0FF]' 
-                            : 'bg-[#00F0FF]/70' 
-                          : 'bg-[#051525]'
-                      }`}
+                      style={{ 
+                        height: `${randomHeight}px`,
+                        backgroundColor: active ? neonColor : '#051525',
+                        boxShadow: active && isPlaying ? `0 0 6px ${neonColor}` : 'none'
+                      }}
+                      className="w-1 rounded-full transition-all duration-150"
                     />
                   );
                 })}
@@ -293,19 +299,19 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
           {/* Right: Audio Tag, Volume & Buy Button */}
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             
-            {/* Voice Tag Watermark toggle */}
+            {/* Voice Tag Watermark toggle with official fixed audio tag badge */}
             <button
               id="btn-toggle-voice-tag"
               onClick={handleToggleVoiceTag}
               className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-mono font-medium border transition ${
                 hasVoiceTag 
-                  ? 'bg-[#00F0FF]/15 border-[#00F0FF]/40 text-[#00F0FF] shadow-[0_0_10px_rgba(0,240,255,0.2)]' 
+                  ? 'bg-[#FF5500]/15 border-[#FF5500]/50 text-[#FF5500] shadow-[0_0_12px_rgba(255,85,0,0.3)]' 
                   : 'bg-[#051525] border-[#00F0FF]/20 text-sky-300/40'
               }`}
-              title={hasVoiceTag ? 'Etiqueta de voz / Watermark activada' : 'Etiqueta de voz desactivada'}
+              title={hasVoiceTag ? 'Tag oficial "Samu Helman en el mix" activado en la reproducción' : 'Tag de audio desactivado'}
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span className="text-[11px]">{hasVoiceTag ? 'Tag ON' : 'Tag OFF'}</span>
+              <span className="text-[11px]">{hasVoiceTag ? 'Tag Samu Helman' : 'Tag OFF'}</span>
             </button>
 
             {/* Volume Control */}
@@ -337,15 +343,15 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
               />
             </div>
 
-            {/* Direct Buy CTA for current beat */}
+            {/* Direct Buy CTA for current beat (Verde Oscuro Neón) */}
             <button
               id="btn-player-buy"
               onClick={() => onOpenCheckout(currentBeat)}
-              className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider text-black bg-[#00F0FF] hover:bg-[#38BDF8] shadow-[0_0_15px_rgba(0,240,255,0.4)] transition active:scale-95"
+              className="flex items-center gap-1.5 px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold uppercase tracking-wider text-black bg-[#00C853] hover:bg-[#00E676] shadow-[0_0_16px_rgba(0,200,83,0.45)] transition active:scale-95"
             >
               <ShoppingCart className="w-4 h-4" />
               <span className="hidden sm:inline">Comprar Licencia</span>
-              <span className="sm:hidden font-mono">{currencySymbol}{currentBeat.tierPrices?.basic || 24.99}</span>
+              <span className="sm:hidden font-mono">{currencySymbol}{currentBeat.tierPrices?.basic || 20}</span>
             </button>
 
           </div>

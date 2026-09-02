@@ -93,6 +93,153 @@ export const DEFAULT_PAYMENT_CONFIG: PaymentGatewaysConfig = {
 
 export const INITIAL_BEATS: Beat[] = [
   {
+    id: "beat-1788377015961",
+    title: "Pacto Beat",
+    producer: "Samu helman en el mix / Samuel Helman",
+    genre: "Boom Bap",
+    subgenre: "Dark Trap",
+    bpm: 75,
+    keyScale: "D Minor",
+    mood: [
+      "Agresivo",
+      "Oscuro"
+    ],
+    tags: [
+      "#Dark #Boom Bap"
+    ],
+    duration: "3:18",
+    durationSeconds: 198,
+    coverUrl: "https://files.catbox.moe/wvn4ex.png",
+    audioUrl: "https://files.catbox.moe/ciqxqs.mp3",
+    audioPreviewUrl: "https://files.catbox.moe/ciqxqs.mp3",
+    audioFileName: "Pacto_Beat__Samuel_Helman_Dmin_75bpm (1).wav",
+    stemsFileUrl: "https://drive.google.com/drive/folders/1rSvof1fD0hFnD79tsr5dWlScqi881dVX",
+    previewDuration: 40,
+    isWatermarkedPreview: true,
+    previewWaveform: [
+      0.1487, 0.12, 0.12, 0.4535, 0.3069, 0.322, 0.3936, 0.3205, 0.2368, 0.4026,
+      0.4187, 0.3105, 0.3248, 0.4228, 0.2663, 0.2468, 0.5115, 0.3322, 0.3818, 0.4672,
+      0.3037, 0.3519, 0.4687, 0.3969, 0.3486, 0.4476, 0.4195, 0.3324, 0.4324, 0.5134,
+      0.3194, 0.3688, 0.5657, 0.3521, 0.4043, 0.5652, 0.4316, 0.4263, 0.5059, 0.4082
+    ],
+    description: "Beat instrumental masterizado listo para grabación vocal profesional con contrato legal incluido.",
+    plays: 0,
+    likes: 0,
+    isFeatured: false,
+    isSoldExclusive: false,
+    createdAt: "2026-09-02",
+    paypalLinks: {
+      basic: "https://www.paypal.com/paypalme/samuhelman/20.00USD",
+      media: "https://www.paypal.com/paypalme/samuhelman/45.00USD",
+      exclusive: "https://www.paypal.com/paypalme/samuhelman/150.00USD",
+      premium: "https://www.paypal.com/paypalme/samuhelman/250.00USD"
+    },
+    tierPrices: {
+      basic: 20,
+      media: 45,
+      exclusive: 150,
+      premium: 250
+    }
+  },
+  {
+    id: "beat-1788175827487",
+    title: "Beat Boom Bap Años 60's",
+    producer: "Samu helman en el mix / Samuel Helman",
+    genre: "Boom Bap",
+    subgenre: "Hip Hop",
+    bpm: 120,
+    keyScale: "Eb minor ",
+    mood: [
+      "Agresivo",
+      "Oscuro"
+    ],
+    tags: [
+      "#Boombap #Hiphop"
+    ],
+    duration: "3:29",
+    durationSeconds: 209,
+    coverUrl: "https://files.catbox.moe/87jsp8.png",
+    audioUrl: "https://files.catbox.moe/9crrf4.mp3",
+    audioPreviewUrl: "https://files.catbox.moe/9crrf4.mp3",
+    audioFileName: "60s_Beat__Samuel_Helman_60_bpm_mix.wav",
+    stemsFileUrl: "https://drive.google.com/drive/folders/1M3VdN7DCHCQ5LqUI_E29NPa9fGmPaNxw",
+    previewDuration: 40,
+    isWatermarkedPreview: true,
+    previewWaveform: [
+      0.201, 0.127, 0.250, 0.149, 0.173, 0.126, 0.177, 0.244, 0.192, 0.145,
+      0.252, 0.161, 0.183, 0.144, 0.251, 0.291, 0.307, 0.190, 0.355, 0.179,
+      0.277, 0.185, 0.284, 0.375, 0.317, 0.187, 0.353, 0.177, 0.275, 0.185,
+      0.236, 0.333, 0.319, 0.188, 0.353, 0.178, 0.275, 0.184, 0.283, 0.374
+    ],
+    description: "Beat instrumental masterizado listo para grabación vocal profesional con contrato legal incluido.",
+    plays: 0,
+    likes: 0,
+    isFeatured: true,
+    isSoldExclusive: false,
+    createdAt: "2026-08-31",
+    paypalLinks: {
+      basic: "https://www.paypal.com/paypalme/samuhelman/20.00USD",
+      media: "https://www.paypal.com/paypalme/samuhelman/45.00USD",
+      exclusive: "https://www.paypal.com/paypalme/samuhelman/150.00USD",
+      premium: "https://www.paypal.com/paypalme/samuhelman/250.00USD"
+    },
+    tierPrices: {
+      basic: 20,
+      media: 45,
+      exclusive: 150,
+      premium: 300
+    }
+  },
+  {
+    id: "beat-1787871263083",
+    title: "EMILIA TECHNO POP TYPE BEAT",
+    producer: "Samu helman en el mix / Samuel Helman",
+    genre: "Trap",
+    subgenre: "Dark Trap",
+    bpm: 128,
+    keyScale: "G Minor",
+    mood: [
+      "Agresivo",
+      "Oscuro"
+    ],
+    tags: [
+      "#pop #techno"
+    ],
+    duration: "2:33",
+    durationSeconds: 153,
+    coverUrl: "https://files.catbox.moe/8a4p42.png",
+    audioUrl: "https://files.catbox.moe/j54r7h.mp3",
+    audioPreviewUrl: "https://files.catbox.moe/j54r7h.mp3",
+    audioFileName: "EMILIA_TYPE_BEAT__SAMUEL_HELMAN.wav",
+    stemsFileUrl: "https://drive.google.com/drive/folders/1Lb2goAHF1r7PWGjU8B5DuVnTXYKlXDVl",
+    previewDuration: 40,
+    isWatermarkedPreview: true,
+    previewWaveform: [
+      0.247, 0.294, 0.523, 0.405, 0.272, 0.273, 0.245, 0.375, 0.399, 0.476,
+      0.468, 0.409, 0.392, 0.353, 0.342, 0.337, 0.493, 0.602, 0.520, 0.456,
+      0.460, 0.182, 0.548, 0.685, 0.666, 0.640, 0.639, 0.643, 0.652, 0.643,
+      0.432, 0.683, 0.681, 0.681, 0.689, 0.651, 0.329, 0.646, 0.721, 0.696
+    ],
+    description: "Beat instrumental masterizado listo para grabación vocal profesional con contrato legal incluido.",
+    plays: 0,
+    likes: 0,
+    isFeatured: false,
+    isSoldExclusive: false,
+    createdAt: "2026-08-27",
+    paypalLinks: {
+      basic: "https://www.paypal.com/paypalme/samuhelman/20.00USD",
+      media: "https://www.paypal.com/paypalme/samuhelman/45.00USD",
+      exclusive: "https://www.paypal.com/paypalme/samuhelman/150.00USD",
+      premium: "https://www.paypal.com/paypalme/samuhelman/250.00USD"
+    },
+    tierPrices: {
+      basic: 20,
+      media: 45,
+      exclusive: 150,
+      premium: 300
+    }
+  },
+  {
     id: "beat-1787199692068",
     title: "Pista de Reggaeton 2026 \"Nos conocemos\"",
     producer: "Samu helman en el mix / Samuel Helman",

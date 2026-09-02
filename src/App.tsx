@@ -15,7 +15,8 @@ import {
   Headphones,
   CheckCircle2,
   DollarSign,
-  Cloud
+  Cloud,
+  Instagram
 } from 'lucide-react';
 import { Beat, Genre, LicenseTierKey, PaymentGatewaysConfig, PurchasedLicense } from './types';
 import { INITIAL_BEATS, DEFAULT_PAYMENT_CONFIG, GENRES_LIST, DEFAULT_LICENSE_TIERS } from './data/defaultBeats';
@@ -37,7 +38,6 @@ import { PromoBanner } from './components/PromoBanner';
 import { BeatCoverImage } from './components/BeatCoverImage';
 import { getBeatSlug } from './utils/beatLinks';
 
-import { ProducerLoginModal } from './components/ProducerLoginModal';
 import { 
   testConnection, 
   subscribeToRealtimeBeats, 
@@ -245,51 +245,38 @@ export default function App() {
     localStorage.setItem(STORAGE_KEYS.LIKES, JSON.stringify(likedBeatIds));
   }, [likedBeatIds]);
 
-  // Admin access detection from URL: ?admin=true or ?admin=samuhelman or state
+  // Check if current environment is the Google AI Studio development session
+  const isStudioSession = typeof window !== 'undefined' && (
+    window.location.hostname.toLowerCase().includes('ais-dev-') ||
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1'
+  );
+
+  // Admin privileges are STRICTLY restricted to this session in Google AI Studio.
+  // External clients (from YouTube or shared preview ais-pre-*) will NEVER have admin access.
   const [isAdminMode, setIsAdminMode] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const adminParam = params.get('admin');
-      if (adminParam && ['true', '1', 'samuhelman', 'samu', 'secret', 'producer'].includes(adminParam.toLowerCase())) {
-        return true;
-      }
+    if (!isStudioSession) {
+      return false;
     }
-    return false;
+    // In Google AI Studio, Samu Helman has producer controls enabled by default
+    return true;
   });
 
-  const [isProducerLoginOpen, setIsProducerLoginOpen] = useState(false);
-
-  // Secret shortcut (Ctrl+Shift+A or Alt+A) to open Producer Access
+  // Remove any legacy admin password keys from client browsers
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (
-        (e.ctrlKey && e.shiftKey && (e.key === 'A' || e.key === 'a')) ||
-        (e.altKey && (e.key === 'A' || e.key === 'a')) ||
-        (e.ctrlKey && e.altKey && (e.key === 'P' || e.key === 'p'))
-      ) {
-        e.preventDefault();
-        setIsProducerLoginOpen(true);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('samuhelman_admin_pwd_v1');
+      } catch {
+        // ignore
       }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    }
   }, []);
 
-  // Toggle Admin Mode Handler & URL Sync
+  // Toggle Admin Mode Handler (Allowed ONLY in Google AI Studio session)
   const handleToggleAdminMode = () => {
-    setIsAdminMode((prev) => {
-      const nextState = !prev;
-      if (typeof window !== 'undefined' && window.history?.replaceState) {
-        const url = new URL(window.location.href);
-        if (nextState) {
-          url.searchParams.set('admin', 'true');
-        } else {
-          url.searchParams.delete('admin');
-        }
-        window.history.replaceState({}, '', url.toString());
-      }
-      return nextState;
-    });
+    if (!isStudioSession) return;
+    setIsAdminMode((prev) => !prev);
   };
 
   const [selectedGenre, setSelectedGenre] = useState<Genre | 'ALL'>('ALL');
@@ -690,17 +677,22 @@ export default function App() {
     searchQuery.trim().length > 0;
 
   return (
-    <div className="min-h-screen bg-[#000000] text-[#E0F2FE] flex flex-col selection:bg-[#00F0FF] selection:text-black font-sans pb-32">
+    <div className="min-h-screen bg-[#000000] text-[#E0F2FE] flex flex-col selection:bg-[#00F0FF] selection:text-black font-sans pb-32 relative overflow-x-hidden">
       
+      {/* Tri-Neon ambient background glows across the whole app: Celeste, Naranja Oscuro, Verde Oscuro */}
+      <div className="fixed top-0 left-1/4 w-[500px] h-[500px] bg-[#00F0FF]/7 rounded-full blur-[150px] pointer-events-none -z-10" />
+      <div className="fixed top-1/3 right-10 w-[450px] h-[450px] bg-[#FF5500]/6 rounded-full blur-[160px] pointer-events-none -z-10" />
+      <div className="fixed bottom-24 left-10 w-[450px] h-[450px] bg-[#00C853]/6 rounded-full blur-[150px] pointer-events-none -z-10" />
+
       {/* Navbar */}
       <Navbar
         isAdminMode={isAdminMode}
+        isStudioSession={isStudioSession}
         onToggleAdminMode={handleToggleAdminMode}
         onOpenNewBeatModal={handleOpenNewBeatModal}
         onOpenPaymentSettings={() => setIsPaymentSettingsOpen(true)}
         onOpenPurchasesModal={() => setIsPurchasesOpen(true)}
         onOpenCodeArchitecture={() => setIsCodeArchitectureOpen(true)}
-        onOpenProducerLogin={() => setIsProducerLoginOpen(true)}
         purchasedCount={purchases.length}
         paymentConfig={paymentConfig}
         searchQuery={searchQuery}
@@ -713,7 +705,7 @@ export default function App() {
         
         {/* Direct Link Arrival Banner from YouTube */}
         {directLinkBeat && (
-          <div className="mb-6 p-4 rounded-2xl bg-[#051525] border border-[#00F0FF] shadow-[0_0_25px_rgba(0,240,255,0.25)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-3">
+          <div className="mb-6 p-4 rounded-2xl bg-[#030A14] border border-[#00F0FF]/60 shadow-[0_0_25px_rgba(0,240,255,0.25)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in slide-in-from-top-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl overflow-hidden bg-black border border-[#00F0FF]/40 shrink-0">
                 <BeatCoverImage 
@@ -724,7 +716,7 @@ export default function App() {
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-[#00F0FF] text-black">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-[#FF5500] text-black shadow-[0_0_8px_#FF5500]">
                     Link Directo de YouTube
                   </span>
                   <span className="text-xs text-[#00F0FF] font-mono font-semibold">
@@ -740,7 +732,7 @@ export default function App() {
             <div className="flex items-center gap-2 self-end sm:self-auto">
               <button
                 onClick={() => handleOpenDetails(directLinkBeat)}
-                className="px-3 py-1.5 rounded-xl bg-[#00F0FF] text-black font-mono font-bold text-xs hover:bg-[#38BDF8] shadow-[0_0_10px_rgba(0,240,255,0.3)] transition"
+                className="px-3 py-1.5 rounded-xl bg-[#00C853] text-black font-mono font-bold text-xs hover:bg-[#00E676] shadow-[0_0_12px_rgba(0,200,83,0.4)] transition"
               >
                 Ver Licencias & Comprar
               </button>
@@ -920,16 +912,24 @@ export default function App() {
         )}
 
         {/* Footer */}
-        <footer className="mt-16 pt-8 pb-12 border-t border-[#00F0FF]/15 text-center text-xs text-sky-400/50 space-y-2">
+        <footer className="mt-16 pt-8 pb-12 border-t border-[#00F0FF]/15 text-center text-xs text-sky-400/50 space-y-4">
+          <div className="flex items-center justify-center">
+            <a
+              id="btn-footer-instagram"
+              href="https://www.instagram.com/samuelhelmann?igsi=MXYyOTRyeGRxa2dldg=="
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-[#833ab4]/20 via-[#fd1d1d]/20 to-[#fcb045]/20 border border-pink-500/40 hover:border-pink-400 text-pink-200 hover:text-white text-xs font-mono font-bold transition shadow-[0_0_15px_rgba(236,72,153,0.2)] active:scale-95"
+            >
+              <Instagram className="w-4 h-4 text-pink-400" />
+              <span>Sígueme en Instagram (@samuelhelmann)</span>
+            </a>
+          </div>
+
           <p>
             © {new Date().getFullYear()}{' '}
             <span 
-              onClick={() => {
-                if (!isAdminMode) {
-                  setIsProducerLoginOpen(true);
-                }
-              }}
-              className="hover:text-[#00F0FF] cursor-pointer transition select-none"
+              className="font-bold text-[#00F0FF]"
               title="Samu Helman en el mix"
             >
               {paymentConfig.producerName || 'Samu Helman en el mix'}
@@ -1020,20 +1020,6 @@ export default function App() {
       <CodeArchitectureModal
         isOpen={isCodeArchitectureOpen}
         onClose={() => setIsCodeArchitectureOpen(false)}
-      />
-
-      {/* Producer Key Login Modal */}
-      <ProducerLoginModal
-        isOpen={isProducerLoginOpen}
-        onClose={() => setIsProducerLoginOpen(false)}
-        onSuccess={() => {
-          setIsAdminMode(true);
-          if (typeof window !== 'undefined' && window.history?.replaceState) {
-            const url = new URL(window.location.href);
-            url.searchParams.set('admin', 'true');
-            window.history.replaceState({}, '', url.toString());
-          }
-        }}
       />
 
     </div>
