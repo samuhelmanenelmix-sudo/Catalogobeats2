@@ -268,3 +268,44 @@ export async function savePurchasedLicenseToFirestore(license: PurchasedLicense)
     handleFirestoreError(error, OperationType.CREATE, path);
   }
 }
+
+/**
+ * Subscribe to real-time updates for the purchases collection (Admin/Producer view)
+ */
+export function subscribeToRealtimePurchases(
+  onPurchasesUpdate: (purchases: PurchasedLicense[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  const colRef = collection(db, PURCHASES_COLLECTION);
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const results: PurchasedLicense[] = [];
+      snapshot.forEach((docSnap) => {
+        if (docSnap.exists()) {
+          results.push(docSnap.data() as PurchasedLicense);
+        }
+      });
+      // Sort newest first
+      results.sort((a, b) => (b.orderId || '').localeCompare(a.orderId || ''));
+      onPurchasesUpdate(results);
+    },
+    (error) => {
+      console.warn('Firestore purchases listener error:', error);
+      if (onError) onError(error as Error);
+    }
+  );
+}
+
+/**
+ * Delete a purchase record from Firestore
+ */
+export async function deletePurchasedLicenseFromFirestore(orderId: string): Promise<void> {
+  const path = `${PURCHASES_COLLECTION}/${orderId}`;
+  try {
+    const docRef = doc(db, PURCHASES_COLLECTION, orderId);
+    await deleteDoc(docRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}

@@ -27,10 +27,11 @@ import {
   FileAudio,
   Loader2
 } from 'lucide-react';
-import { Beat, PaymentGatewaysConfig } from '../types';
+import { Beat, PaymentGatewaysConfig, PurchasedLicense } from '../types';
 import { BeatCoverImage } from './BeatCoverImage';
 import { getBeatDirectUrl, getBeatSlug, copyToClipboard } from '../utils/beatLinks';
 import { audioEngine } from '../utils/audioSynth';
+import { AdminSalesDashboard } from './AdminSalesDashboard';
 
 interface AdminPanelProps {
   beats: Beat[];
@@ -40,6 +41,10 @@ interface AdminPanelProps {
   paymentConfig: PaymentGatewaysConfig;
   currencySymbol: string;
   isCloudSynced?: boolean;
+  purchases?: PurchasedLicense[];
+  onAddManualPurchase?: (purchase: PurchasedLicense) => void;
+  onDeletePurchase?: (orderId: string) => void;
+  isStudioSession?: boolean;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -50,9 +55,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   paymentConfig,
   currencySymbol,
   isCloudSynced = true,
+  purchases = [],
+  onAddManualPurchase,
+  onDeletePurchase,
+  isStudioSession = true,
 }) => {
+  const [activeAdminTab, setActiveAdminTab] = useState<'catalog' | 'sales'>('catalog');
   const [copiedBeatId, setCopiedBeatId] = useState<string | null>(null);
   const [selectedBeatForLink, setSelectedBeatForLink] = useState<string>(beats[0]?.id || '');
+
+  const totalSalesRevenue = purchases.reduce((acc, p) => acc + (Number(p.amountPaid) || 0), 0);
 
   const beatsWithPaypal = beats.filter(
     (b) => b.paypalLinks?.basic || b.paypalLinks?.premium || b.paypalLinks?.unlimited || b.paypalLinks?.exclusive
@@ -159,12 +171,64 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   return (
-    <div className="bg-[#030A14] border border-[#00F0FF]/35 rounded-3xl p-5 sm:p-6 mb-8 text-[#E0F2FE] shadow-[0_0_30px_rgba(0,240,255,0.12)] relative overflow-hidden">
-      
-      {/* Subtle neon cyan glow */}
-      <div className="absolute top-0 right-0 w-96 h-96 bg-[#00F0FF]/10 blur-3xl pointer-events-none -mr-20 -mt-20 rounded-full" />
+    <div className="space-y-6 mb-8">
+      {/* Admin Panel Main Section Navigation Tabs */}
+      <div className="flex flex-wrap items-center gap-3 p-2 rounded-2xl bg-[#020710] border border-[#00F0FF]/30 shadow-[0_0_20px_rgba(0,240,255,0.08)]">
+        <button
+          id="admin-tab-catalog"
+          type="button"
+          onClick={() => setActiveAdminTab('catalog')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-mono text-xs font-bold uppercase tracking-wider transition ${
+            activeAdminTab === 'catalog'
+              ? 'bg-[#00F0FF] text-black shadow-[0_0_15px_rgba(0,240,255,0.4)]'
+              : 'bg-[#051525] text-sky-200 hover:bg-[#0A223D] border border-[#00F0FF]/25'
+          }`}
+        >
+          <Disc className="w-4 h-4" />
+          <span>Gestión de Catálogo & Precios</span>
+          <span className={`px-2 py-0.5 text-[10px] rounded-full font-bold ${
+            activeAdminTab === 'catalog' ? 'bg-black text-[#00F0FF]' : 'bg-[#00F0FF]/20 text-[#00F0FF]'
+          }`}>
+            {beats.length} Beats
+          </span>
+        </button>
 
-      <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+        <button
+          id="admin-tab-sales"
+          type="button"
+          onClick={() => setActiveAdminTab('sales')}
+          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-mono text-xs font-bold uppercase tracking-wider transition relative ${
+            activeAdminTab === 'sales'
+              ? 'bg-[#FF5500] text-black shadow-[0_0_18px_rgba(255,85,0,0.5)]'
+              : 'bg-[#051525] text-[#FF5500] hover:bg-[#FF5500]/15 border border-[#FF5500]/40'
+          }`}
+        >
+          <DollarSign className="w-4 h-4" />
+          <span>Historial de Ventas & Facturación</span>
+          <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-black/50 text-white border border-white/10">
+            🔒 Solo Samu Helman ({purchases.length} • ${totalSalesRevenue.toFixed(0)} USD)
+          </span>
+        </button>
+      </div>
+
+      {activeAdminTab === 'sales' ? (
+        <AdminSalesDashboard
+          beats={beats}
+          purchases={purchases}
+          onAddManualPurchase={onAddManualPurchase}
+          onDeletePurchase={onDeletePurchase}
+          paymentConfig={paymentConfig}
+          currencySymbol={currencySymbol}
+          isStudioSession={isStudioSession}
+        />
+      ) : (
+        <div className="bg-[#030A14] border border-[#00F0FF]/35 rounded-3xl p-5 sm:p-6 text-[#E0F2FE] shadow-[0_0_30px_rgba(0,240,255,0.12)] relative overflow-hidden">
+          
+          {/* Subtle neon cyan glow */}
+          <div className="absolute top-0 right-0 w-96 h-96 bg-[#00F0FF]/10 blur-3xl pointer-events-none -mr-20 -mt-20 rounded-full" />
+
+          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+
         
         {/* Left: Producer Banner */}
         <div>
@@ -500,6 +564,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </a>
             </div>
           </div>
+        </div>
+      )}
+
         </div>
       )}
 

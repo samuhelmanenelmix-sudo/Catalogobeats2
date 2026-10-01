@@ -18,6 +18,7 @@ import {
 import { Beat } from '../types';
 import { audioEngine } from '../utils/audioSynth';
 import { BeatCoverImage } from './BeatCoverImage';
+import { MusicalBarInfo } from '../utils/tempoAnalyzer';
 
 interface AudioPlayerProps {
   currentBeat: Beat | null;
@@ -61,6 +62,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const [isMuted, setIsMuted] = useState(false);
   const [hasVoiceTag, setHasVoiceTag] = useState(true);
   const [playerError, setPlayerError] = useState<string | null>(null);
+  const [musicalInfo, setMusicalInfo] = useState<MusicalBarInfo | null>(null);
 
   // Clear previous error and update duration when track changes
   useEffect(() => {
@@ -69,6 +71,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
     const expectedDur = parseDuration(currentBeat);
     const engineDur = audioEngine.getDuration();
     setDuration(engineDur && engineDur > 0 ? engineDur : expectedDur);
+    setMusicalInfo(audioEngine.getMusicalBarInfo());
   }, [currentBeat?.id]);
 
   useEffect(() => {
@@ -86,6 +89,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
         if (onAudioError) onAudioError(msg);
       }
     );
+
+    audioEngine.setMusicalBarCallback((info) => {
+      setMusicalInfo(info);
+    });
   }, [onNextBeat, onAudioError]);
 
   if (!currentBeat) return null;
@@ -216,6 +223,29 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
                 <span className="text-[#00F0FF] font-semibold">{currentBeat.bpm} BPM</span>
                 <span className="hidden sm:inline">•</span>
                 <span className="hidden sm:inline text-sky-300/50">{currentBeat.keyScale}</span>
+
+                {musicalInfo && (
+                  <>
+                    <span className="hidden md:inline">•</span>
+                    <span 
+                      className={`hidden md:inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded border transition-all ${
+                        musicalInfo.isTurnaroundBar && hasVoiceTag
+                          ? 'bg-[#FF5500]/20 border-[#FF5500] text-[#FF5500] font-bold shadow-[0_0_10px_rgba(255,85,0,0.4)] animate-pulse'
+                          : 'bg-[#00F0FF]/10 border-[#00F0FF]/30 text-[#00F0FF]'
+                      }`}
+                      title={`Compás musical ${musicalInfo.currentBar} de ${musicalInfo.totalBars}. El tag de voz ingresa en los compases 8, 16, 24, 32...`}
+                    >
+                      {musicalInfo.isTurnaroundBar && hasVoiceTag ? (
+                        <>
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#FF5500] animate-ping" />
+                          <span>Compás {musicalInfo.currentBar} [Tag en Vivo]</span>
+                        </>
+                      ) : (
+                        <span>Compás {musicalInfo.currentBar}/{musicalInfo.totalBars} (Tag C.{musicalInfo.nextTagBar})</span>
+                      )}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -299,7 +329,7 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
           {/* Right: Audio Tag, Volume & Buy Button */}
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             
-            {/* Voice Tag Watermark toggle with official fixed audio tag badge */}
+            {/* Voice Tag Watermark toggle with official musical bar cadence */}
             <button
               id="btn-toggle-voice-tag"
               onClick={handleToggleVoiceTag}
@@ -308,10 +338,10 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
                   ? 'bg-[#FF5500]/15 border-[#FF5500]/50 text-[#FF5500] shadow-[0_0_12px_rgba(255,85,0,0.3)]' 
                   : 'bg-[#051525] border-[#00F0FF]/20 text-sky-300/40'
               }`}
-              title={hasVoiceTag ? 'Tag oficial "Samu Helman en el mix" activado en la reproducción' : 'Tag de audio desactivado'}
+              title={hasVoiceTag ? 'Tag oficial en compases 8 y 16 ("Samu Helman en el mix")' : 'Tag de audio desactivado'}
             >
               <Sparkles className="w-3.5 h-3.5" />
-              <span className="text-[11px]">{hasVoiceTag ? 'Tag Samu Helman' : 'Tag OFF'}</span>
+              <span className="text-[11px]">{hasVoiceTag ? 'Tag en C.8/16' : 'Tag OFF'}</span>
             </button>
 
             {/* Volume Control */}

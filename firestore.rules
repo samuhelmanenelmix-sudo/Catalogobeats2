@@ -62,6 +62,12 @@ service cloud.firestore {
              (!('paypalBaseUrl' in data) || (data.paypalBaseUrl is string && data.paypalBaseUrl.size() <= 250)) &&
              (!('enableDirectPaypalLinks' in data) || data.enableDirectPaypalLinks is bool) &&
              (!('enableMercadoPago' in data) || data.enableMercadoPago is bool) &&
+             (!('mercadoPagoAlias' in data) || (data.mercadoPagoAlias is string && data.mercadoPagoAlias.size() <= 100)) &&
+             (!('mercadopago_public_key' in data) || (data.mercadopago_public_key is string && data.mercadopago_public_key.size() <= 250)) &&
+             (!('mercadopago_access_token' in data) || (data.mercadopago_access_token is string && data.mercadopago_access_token.size() <= 250)) &&
+             (!('dolarExchangeRate' in data) || data.dolarExchangeRate is number) &&
+             (!('dolarRateMode' in data) || (data.dolarRateMode is string && data.dolarRateMode.size() <= 30)) &&
+             (!('dolarLastUpdated' in data) || (data.dolarLastUpdated is string && data.dolarLastUpdated.size() <= 150)) &&
              (!('enableBankTransfer' in data) || data.enableBankTransfer is bool) &&
              (!('enableWhatsAppCheckout' in data) || data.enableWhatsAppCheckout is bool);
     }

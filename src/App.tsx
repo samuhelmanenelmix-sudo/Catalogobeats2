@@ -34,6 +34,7 @@ import { AdminBeatEditorModal } from './components/AdminBeatEditorModal';
 import { AdminPanel } from './components/AdminPanel';
 import { PaymentSettingsModal } from './components/PaymentSettingsModal';
 import { CodeArchitectureModal } from './components/CodeArchitectureModal';
+import { MercadoPagoReturnModal } from './components/MercadoPagoReturnModal';
 import { PromoBanner } from './components/PromoBanner';
 import { BeatCoverImage } from './components/BeatCoverImage';
 import { getBeatSlug } from './utils/beatLinks';
@@ -47,6 +48,8 @@ import {
   subscribeToPaymentConfig, 
   savePaymentConfigToFirestore, 
   savePurchasedLicenseToFirestore,
+  subscribeToRealtimePurchases,
+  deletePurchasedLicenseFromFirestore,
   sanitizeBeatForFirestore
 } from './lib/firebase';
 
@@ -164,13 +167,20 @@ export default function App() {
       }
     });
 
-    // 5. Fallback fetch from local Express backend
+    // 5. Real-time Purchases Listener (Admin & Producer Sales Overview)
+    const unsubscribePurchases = subscribeToRealtimePurchases((cloudPurchases) => {
+      if (cloudPurchases && Array.isArray(cloudPurchases)) {
+        setPurchases(cloudPurchases);
+        localStorage.setItem(STORAGE_KEYS.PURCHASES, JSON.stringify(cloudPurchases));
+      }
+    });
+
+    // 6. Fallback fetch from local Express backend
     fetch('/api/beats')
       .then((res) => res.json())
       .then((data) => {
         const serverBeats: Beat[] = data && Array.isArray(data.beats) ? data.beats : [];
         if (serverBeats.length > 0) {
-          // If cloud listener hasn't loaded yet and local storage is empty
           setBeats((prev) => (prev.length === 0 ? serverBeats : prev));
         }
       })
@@ -178,9 +188,58 @@ export default function App() {
         console.log('Operando con catálogo Firestore / localStorage:', err);
       });
 
+    // 7. Sync server PayPal completed orders if any
+    fetch('/api/admin/sales')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.success && Array.isArray(data.sales) && data.sales.length > 0) {
+          setPurchases((prev) => {
+            const existingOrderIds = new Set(prev.map((p) => p.orderId));
+            const newServerSales: PurchasedLicense[] = [];
+            for (const s of data.sales) {
+              if (!existingOrderIds.has(s.orderId)) {
+                newServerSales.push({
+                  orderId: s.orderId,
+                  beatTitle: s.beatTitle,
+                  beatId: s.beatId,
+                  producer: 'Samu Helman en el mix',
+                  producerEmail: 'samuhelmanenelmix@gmail.com',
+                  buyerName: s.buyerName || 'Cliente',
+                  buyerEmail: s.buyerEmail || 'cliente@ejemplo.com',
+                  artistStageName: s.artistStageName || s.buyerName,
+                  tierName: s.tierName || 'Licencia',
+                  tierKey: s.tierKey || 'basic',
+                  amountPaid: Number(s.amountPaid) || 0,
+                  currency: s.currency || 'USD',
+                  paymentMethod: s.paymentMethod || 'PayPal v2 API',
+                  transactionRef: s.orderId,
+                  purchaseDate: new Date(s.createdAt).toLocaleDateString('es-ES', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  }),
+                  contractText: s.contractText || '',
+                  contractHtml: s.contractHtml || ''
+                });
+              }
+            }
+            if (newServerSales.length > 0) {
+              const combined = [...prev, ...newServerSales];
+              localStorage.setItem(STORAGE_KEYS.PURCHASES, JSON.stringify(combined));
+              return combined;
+            }
+            return prev;
+          });
+        }
+      })
+      .catch(() => {
+        // quiet fallback
+      });
+
     return () => {
       unsubscribeBeats();
       unsubscribeConfig();
+      unsubscribePurchases();
     };
   }, []);
 
@@ -190,10 +249,13 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed === 'object') {
-          if (!parsed.producerName || parsed.producerName.toLowerCase().includes('literland')) {
-            parsed.producerName = 'Samu Helman en el mix';
-          }
-          return parsed;
+          return {
+            ...DEFAULT_PAYMENT_CONFIG,
+            ...parsed,
+            producerName: (!parsed.producerName || parsed.producerName.toLowerCase().includes('literland')) ? 'Samu Helman en el mix' : parsed.producerName,
+            mercadopago_public_key: parsed.mercadopago_public_key || DEFAULT_PAYMENT_CONFIG.mercadopago_public_key,
+            mercadopago_access_token: parsed.mercadopago_access_token || DEFAULT_PAYMENT_CONFIG.mercadopago_access_token,
+          };
         }
       } catch {
         // ignore
@@ -661,6 +723,20 @@ export default function App() {
     }
   };
 
+  const handleDeletePurchase = async (orderId: string) => {
+    setPurchases((prev) => prev.filter((p) => p.orderId !== orderId));
+    try {
+      await deletePurchasedLicenseFromFirestore(orderId);
+    } catch (err) {
+      console.error('Error eliminando compra de Firestore:', err);
+    }
+    try {
+      await fetch(`/api/admin/sales/${orderId}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error('Error eliminando compra del servidor:', err);
+    }
+  };
+
   const handleResetFilters = () => {
     setSelectedGenre('ALL');
     setSelectedBpmRange('ALL');
@@ -777,6 +853,10 @@ export default function App() {
             paymentConfig={paymentConfig}
             currencySymbol={paymentConfig.currencySymbol}
             isCloudSynced={isCloudSynced}
+            purchases={purchases}
+            onAddManualPurchase={handlePurchaseComplete}
+            onDeletePurchase={handleDeletePurchase}
+            isStudioSession={isStudioSession}
           />
         )}
 
@@ -1020,6 +1100,13 @@ export default function App() {
       <CodeArchitectureModal
         isOpen={isCodeArchitectureOpen}
         onClose={() => setIsCodeArchitectureOpen(false)}
+      />
+
+      {/* Modal 7: Mercado Pago Checkout Pro Return & Immediate Delivery */}
+      <MercadoPagoReturnModal
+        beats={beats}
+        onPurchaseComplete={handlePurchaseComplete}
+        onOpenContractVault={() => setIsPurchasesOpen(true)}
       />
 
     </div>

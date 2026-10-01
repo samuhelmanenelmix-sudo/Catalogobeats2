@@ -39,6 +39,11 @@ export interface PaymentGatewaysConfig {
   enableDirectPaypalLinks: boolean;
   enableMercadoPago: boolean;
   mercadoPagoAlias?: string;
+  mercadopago_public_key?: string;
+  mercadopago_access_token?: string;
+  dolarExchangeRate?: number; // Cached or custom rate in ARS (e.g. 1350)
+  dolarRateMode?: 'auto' | 'manual'; // Auto daily sync at 00:00 vs manual override
+  dolarLastUpdated?: string; // Timestamp of the rate calculation
   enableBankTransfer: boolean;
   bankDetails?: string;
   enableWhatsAppCheckout: boolean;

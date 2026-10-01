@@ -1,9 +1,11 @@
+import { detectBpmFromAudioBuffer } from './tempoAnalyzer';
+
 /**
  * Audio Processor Engine
  * Handles automatic conversion of high-fidelity WAV master files into:
  * 1. A 40-second promotional preview clip.
  * 2. Lower sample-rate / bandwidth-limited preview audio (to prevent master ripping).
- * 3. Watermarking / Voice Tag audio ("Samu Helman en el mix") intercalated every 15 seconds (0s, 15s, 30s).
+ * 3. Musical bar turnaround Voice Tag audio ("Samu Helman en el mix") at Bar 8, Bar 16, etc.
  */
 
 export interface ProcessedAudioResult {
@@ -174,6 +176,7 @@ export async function processMasterWavToPreviewClip(
   options: {
     targetDurationSeconds?: number;
     intervalSeconds?: number;
+    bpm?: number;
     previewSampleRate?: number;
     producerName?: string;
     onProgress?: (progress: AudioProcessingProgress) => void;
@@ -182,6 +185,7 @@ export async function processMasterWavToPreviewClip(
   const {
     targetDurationSeconds = 40,
     intervalSeconds = 15,
+    bpm,
     previewSampleRate = 32000, // Reduced quality (32kHz) for preview protection
     producerName = 'Samu Helman en el mix',
     onProgress = () => {}
@@ -206,6 +210,12 @@ export async function processMasterWavToPreviewClip(
   const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
   const tempCtx = new AudioCtx();
   const decodedBuffer = await tempCtx.decodeAudioData(arrayBuffer);
+
+  // Automatic AI/Algorithmic Tempo Recognition
+  let effectiveBpm = bpm;
+  if (!effectiveBpm || effectiveBpm < 45 || effectiveBpm > 240) {
+    effectiveBpm = await detectBpmFromAudioBuffer(decodedBuffer);
+  }
 
   // Attempt to load official producer voice tag audio buffer
   let voiceTagBuffer: AudioBuffer | null = null;
@@ -267,37 +277,44 @@ export async function processMasterWavToPreviewClip(
   const masterGain = offlineCtx.createGain();
   masterGain.gain.setValueAtTime(0.9, 0);
 
-  // 5. Intercalate Voice Tag / Watermark every 15 seconds (at 0s, 15s, 30s)
+  // 5. Musical bar-based Voice Tag placement (Bar 8, Bar 16, Bar 24...)
+  const barDuration = (60 / effectiveBpm) * 4; // 4/4 meter
+  const targetTurnaroundBars = [8, 16, 24, 32, 40];
+  const watermarkIntervals: number[] = targetTurnaroundBars
+    .map(bar => (bar - 1) * barDuration)
+    .filter(t => t > 0 && t < actualDuration - 2.5);
+
+  if (watermarkIntervals.length === 0) {
+    watermarkIntervals.push(Math.min(14, actualDuration / 2));
+  }
+
   onProgress({
     step: 'watermarking',
     percent: 75,
-    message: `Insertando Voice Tag (${producerName}) cada ${intervalSeconds}s (0s, 15s, 30s)...`
+    message: `Insertando Voice Tag (${producerName}) en compases 8 y 16 (${effectiveBpm} BPM)...`
   });
 
-  const watermarkIntervals: number[] = [];
-  for (let t = 0; t < actualDuration - 2; t += intervalSeconds) {
-    watermarkIntervals.push(t);
-
+  for (const t of watermarkIntervals) {
     if (voiceTagBuffer) {
-      // 1. Gentle musical ducking (~18-20% drop) so the beat remains full and energetic without being obscured
+      // 1. Gentle musical ducking (~15% drop) so the beat remains full and energetic without being obscured
       masterGain.gain.setValueAtTime(0.95, Math.max(0, t - 0.05));
-      masterGain.gain.linearRampToValueAtTime(0.78, t + 0.12);
-      masterGain.gain.linearRampToValueAtTime(0.78, t + 2.2);
+      masterGain.gain.linearRampToValueAtTime(0.82, t + 0.12);
+      masterGain.gain.linearRampToValueAtTime(0.82, t + 2.2);
       masterGain.gain.linearRampToValueAtTime(0.95, t + 2.7);
 
-      // 2. Play the actual producer voice tag audio buffer at 30% reduced volume (0.75 instead of 1.15)
+      // 2. Play the actual producer voice tag audio buffer at 30% reduced volume (0.70 instead of 1.15)
       const tagSource = offlineCtx.createBufferSource();
       tagSource.buffer = voiceTagBuffer;
       const tagGain = offlineCtx.createGain();
-      tagGain.gain.setValueAtTime(0.75, t);
+      tagGain.gain.setValueAtTime(0.70, t);
       tagSource.connect(tagGain);
       tagGain.connect(offlineCtx.destination);
       tagSource.start(t);
     } else {
       // Fallback ducking and acoustic watermark cue
       masterGain.gain.setValueAtTime(0.9, Math.max(0, t - 0.05));
-      masterGain.gain.linearRampToValueAtTime(0.45, t + 0.1);
-      masterGain.gain.linearRampToValueAtTime(0.45, t + 0.85);
+      masterGain.gain.linearRampToValueAtTime(0.55, t + 0.1);
+      masterGain.gain.linearRampToValueAtTime(0.55, t + 0.85);
       masterGain.gain.linearRampToValueAtTime(0.9, t + 1.2);
 
       renderWatermarkAtTime(offlineCtx, t, producerName);

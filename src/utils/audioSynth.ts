@@ -1,5 +1,6 @@
 // Real Audio Playback Engine (Pure HTML5 Audio & Native Stream Manager)
 // Zero synthetic tones / Full HTTPS MP3 & WAV standard stream support
+import { getMusicalBarMetrics, MusicalBarInfo } from './tempoAnalyzer';
 
 /**
  * Normalizes user-supplied audio URLs to direct streamable HTTPS endpoints
@@ -53,10 +54,15 @@ class AudioEngine {
   private onTimeUpdateCallback: ((time: number, duration: number) => void) | null = null;
   private onEndedCallback: (() => void) | null = null;
   private onErrorCallback: ((errorMsg: string) => void) | null = null;
+  private onMusicalBarCallback: ((info: MusicalBarInfo) => void) | null = null;
   private currentTime = 0;
   private totalDuration = 180;
   private hasVoiceTag = true;
-  private lastWatermarkInterval = -1;
+  private currentBpm = 120;
+  private barDuration = 2.0;
+  private totalBars = 32;
+  private lastTriggeredBar = -1;
+  private isTagCurrentlyPlaying = false;
   private synthAudioCtx: AudioContext | null = null;
   private voiceTagSrc = '/uploads/producer-voice-tag.mp3';
 
@@ -105,6 +111,14 @@ class AudioEngine {
     if (onError) this.onErrorCallback = onError;
   }
 
+  public setMusicalBarCallback(cb: (info: MusicalBarInfo) => void) {
+    this.onMusicalBarCallback = cb;
+  }
+
+  public getMusicalBarInfo(): MusicalBarInfo {
+    return getMusicalBarMetrics(this.currentTime, this.totalDuration, this.currentBpm);
+  }
+
   public setVolume(val: number) {
     this.volume = Math.max(0, Math.min(1, val));
     if (this.audioElement) {
@@ -125,39 +139,49 @@ class AudioEngine {
   }
 
   public seek(seconds: number) {
+    const targetTime = Math.max(0, seconds || 0);
     if (this.audioElement && Number.isFinite(seconds)) {
       try {
-        this.audioElement.currentTime = seconds;
-        this.currentTime = seconds;
-        this.lastWatermarkInterval = Math.floor(seconds / 15);
+        this.audioElement.currentTime = targetTime;
+        this.currentTime = targetTime;
+        const metrics = getMusicalBarMetrics(targetTime, this.totalDuration, this.currentBpm);
+        this.lastTriggeredBar = metrics.currentBar;
         if (this.onTimeUpdateCallback) {
           this.onTimeUpdateCallback(this.currentTime, this.totalDuration);
+        }
+        if (this.onMusicalBarCallback) {
+          this.onMusicalBarCallback(metrics);
         }
       } catch (err) {
         console.warn('Seek error:', err);
       }
     } else {
-      this.currentTime = seconds || 0;
-      this.lastWatermarkInterval = Math.floor((seconds || 0) / 15);
+      this.currentTime = targetTime;
+      const metrics = getMusicalBarMetrics(targetTime, this.totalDuration, this.currentBpm);
+      this.lastTriggeredBar = metrics.currentBar;
       if (this.onTimeUpdateCallback) {
         this.onTimeUpdateCallback(this.currentTime, this.totalDuration);
+      }
+      if (this.onMusicalBarCallback) {
+        this.onMusicalBarCallback(metrics);
       }
     }
   }
 
   /**
-   * Triggers the official producer audio watermark rotating every 15-20 seconds:
-   * 1. Overlays the real recorded producer audio tag ("Samu Helman en el mix").
-   * 2. Ducks the beat track volume down smoothly during tag playback for studio clarity.
-   * 3. Completely replaces any previous AI/SpeechSynthesis voice generation.
+   * Triggers the official producer audio watermark at musical bar turnarounds (compás 8, 16, 24, 32...):
+   * 1. Overlays the recorded producer audio tag ("Samu Helman en el mix").
+   * 2. Ducks the beat track volume down only slightly (~15%) so drums, 808 bass, and energy are preserved.
+   * 3. Volume of the tag is reduced by 30% for a smooth, non-invasive placement.
    */
-  private triggerRotatingWatermark(intervalIndex: number) {
+  private triggerMusicalBarWatermark(barNumber: number) {
     if (!this.hasVoiceTag || !this.isPlaying) return;
 
     try {
-      // 1. Gentle studio ducking: beat volume dips only slightly (~15-20%) so the music keeps its energy, bass and rhythm
+      this.isTagCurrentlyPlaying = true;
+      // 1. Gentle musical ducking: beat volume drops only ~15% (stays at 85% presence)
       const originalVolume = this.volume;
-      const duckedVolume = Math.max(0.15, originalVolume * 0.82);
+      const duckedVolume = Math.max(0.18, originalVolume * 0.85);
 
       if (this.audioElement) {
         this.audioElement.volume = duckedVolume;
@@ -170,19 +194,18 @@ class AudioEngine {
 
       if (this.voiceTagAudio) {
         this.voiceTagAudio.currentTime = 0;
-        // 30% reduction from previous volume level to sit smoothly in the mix
-        this.voiceTagAudio.volume = Math.max(0.2, Math.min(0.75, originalVolume * 0.70));
+        // 30% reduction from master volume level to sit smoothly in the mix
+        this.voiceTagAudio.volume = Math.max(0.2, Math.min(0.70, originalVolume * 0.68));
 
         const restoreBeatVolume = () => {
+          this.isTagCurrentlyPlaying = false;
           if (this.audioElement && this.isPlaying) {
-            // Smoothly restore volume
             this.audioElement.volume = this.volume;
           }
         };
 
         this.voiceTagAudio.onended = restoreBeatVolume;
         this.voiceTagAudio.onerror = () => {
-          // If primary path failed, try fallback
           if (this.voiceTagAudio && !this.voiceTagAudio.src.includes('/producer-voice-tag.mp3')) {
             this.voiceTagAudio.src = '/producer-voice-tag.mp3';
             this.voiceTagAudio.play().catch(() => {});
@@ -194,16 +217,16 @@ class AudioEngine {
         if (playPromise !== undefined) {
           playPromise.catch((err) => {
             console.warn('Voice tag audio play deferred by browser:', err);
-            // Restore volume if prevented
             setTimeout(restoreBeatVolume, 1500);
           });
         }
 
-        // Safety fallback timer to ensure beat volume is ALWAYS restored even if onended doesn't fire
-        setTimeout(restoreBeatVolume, 3200);
+        // Safety fallback timer to ensure beat volume is ALWAYS restored smoothly
+        setTimeout(restoreBeatVolume, 3500);
       }
     } catch (e) {
       console.warn('Non-fatal producer voice tag error:', e);
+      this.isTagCurrentlyPlaying = false;
       if (this.audioElement) {
         this.audioElement.volume = this.volume;
       }
@@ -229,6 +252,10 @@ class AudioEngine {
       return { success: false, hasAudio: false, error: 'No audio URL provided' };
     }
 
+    // Configure Musical Tempo & Bar Grid
+    this.currentBpm = Math.max(45, Math.min(240, Number.isFinite(bpm) && bpm > 0 ? bpm : 120));
+    this.barDuration = (60 / this.currentBpm) * 4; // 4/4 meter
+
     // If already playing the exact same track, just resume
     if (this.audioElement && this.currentBeatId === beatId && this.currentAudioUrl === normalizedUrl) {
       if (this.audioElement.paused) {
@@ -248,13 +275,17 @@ class AudioEngine {
     this.stop();
     this.currentBeatId = beatId;
     this.totalDuration = (Number.isFinite(durationSeconds) && durationSeconds > 0) ? durationSeconds : 165;
+    this.totalBars = Math.max(8, Math.floor(this.totalDuration / this.barDuration));
     this.currentTime = 0;
     this.currentAudioUrl = normalizedUrl;
-    this.lastWatermarkInterval = -1;
+    this.lastTriggeredBar = -1; // Reset so Bar 8 can trigger when reached
 
-    // Immediately trigger time update callback so UI never stays at 00:00 / 00:00
+    // Immediately trigger time & musical bar update callbacks so UI reflects tempo and bar 1
     if (this.onTimeUpdateCallback) {
       this.onTimeUpdateCallback(0, this.totalDuration);
+    }
+    if (this.onMusicalBarCallback) {
+      this.onMusicalBarCallback(getMusicalBarMetrics(0, this.totalDuration, this.currentBpm));
     }
 
     try {
@@ -267,15 +298,20 @@ class AudioEngine {
       audio.onloadedmetadata = () => {
         if (Number.isFinite(audio.duration) && audio.duration > 0) {
           this.totalDuration = audio.duration;
+          this.totalBars = Math.max(8, Math.floor(this.totalDuration / this.barDuration));
         }
         if (this.onTimeUpdateCallback) {
           this.onTimeUpdateCallback(this.currentTime, this.totalDuration);
+        }
+        if (this.onMusicalBarCallback) {
+          this.onMusicalBarCallback(getMusicalBarMetrics(this.currentTime, this.totalDuration, this.currentBpm));
         }
       };
 
       audio.ondurationchange = () => {
         if (Number.isFinite(audio.duration) && audio.duration > 0) {
           this.totalDuration = audio.duration;
+          this.totalBars = Math.max(8, Math.floor(this.totalDuration / this.barDuration));
         }
         if (this.onTimeUpdateCallback) {
           this.onTimeUpdateCallback(this.currentTime, this.totalDuration);
@@ -285,6 +321,7 @@ class AudioEngine {
       audio.oncanplay = () => {
         if (Number.isFinite(audio.duration) && audio.duration > 0) {
           this.totalDuration = audio.duration;
+          this.totalBars = Math.max(8, Math.floor(this.totalDuration / this.barDuration));
         }
         if (this.onTimeUpdateCallback) {
           this.onTimeUpdateCallback(audio.currentTime || this.currentTime, this.totalDuration);
@@ -295,28 +332,31 @@ class AudioEngine {
         this.currentTime = audio.currentTime;
         if (Number.isFinite(audio.duration) && audio.duration > 0) {
           this.totalDuration = audio.duration;
+          this.totalBars = Math.max(8, Math.floor(this.totalDuration / this.barDuration));
         }
         if (this.onTimeUpdateCallback) {
           this.onTimeUpdateCallback(this.currentTime, this.totalDuration);
         }
 
-        // Check 15-second rotating watermark trigger (0s, 15s, 30s, 45s, 60s, 75s...)
-        if (this.hasVoiceTag && this.isPlaying) {
-          const intervalIndex = Math.floor(this.currentTime / 15);
-          if (intervalIndex > this.lastWatermarkInterval && this.currentTime >= 0) {
-            this.lastWatermarkInterval = intervalIndex;
-            this.triggerRotatingWatermark(intervalIndex);
+        // Real-time Musical Bar & Turnaround Tag calculation
+        const barMetrics = getMusicalBarMetrics(this.currentTime, this.totalDuration, this.currentBpm);
+        if (this.onMusicalBarCallback) {
+          this.onMusicalBarCallback(barMetrics);
+        }
+
+        // Trigger tag ONLY on designated musical turnaround bars (Bar 8, Bar 16, Bar 24, Bar 32...)
+        // NEVER trigger at Bars 1-7 (intro remains 100% clean and uninvaded)
+        if (this.hasVoiceTag && this.isPlaying && barMetrics.isTurnaroundBar) {
+          if (this.lastTriggeredBar !== barMetrics.currentBar) {
+            this.lastTriggeredBar = barMetrics.currentBar;
+            this.triggerMusicalBarWatermark(barMetrics.currentBar);
           }
         }
       };
 
       audio.onplaying = () => {
         this.isPlaying = true;
-        // Trigger initial watermark at 0s if starting fresh
-        if (this.lastWatermarkInterval === -1) {
-          this.lastWatermarkInterval = 0;
-          this.triggerRotatingWatermark(0);
-        }
+        // Intentionally do NOT trigger at 0s! Intro remains 100% clean.
       };
 
       audio.onpause = () => {
@@ -326,7 +366,7 @@ class AudioEngine {
       audio.onended = () => {
         this.isPlaying = false;
         this.currentTime = 0;
-        this.lastWatermarkInterval = -1;
+        this.lastTriggeredBar = -1;
         if (this.onEndedCallback) {
           this.onEndedCallback();
         }
