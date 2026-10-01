@@ -62,6 +62,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [mpInitError, setMpInitError] = useState<string | null>(null);
+  const [mpCheckoutUrl, setMpCheckoutUrl] = useState<string | null>(null);
   const [completedOrder, setCompletedOrder] = useState<PurchasedLicense | null>(null);
   
   // Real token & download metadata returned by backend capture
@@ -105,6 +107,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setErrorMessage(null);
+      setMpInitError(null);
+      setMpCheckoutUrl(null);
       setCompletedOrder(null);
       setDownloadToken(null);
       setDownloadCount(0);
@@ -292,21 +296,27 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   };
 
   // --------------------------------------------------------------------------
-  // MERCADO PAGO: Create Preference & Capture via Back-End
+  // MERCADO PAGO: Create Preference & Redirect to Checkout Pro
   // --------------------------------------------------------------------------
   const handleMercadoPagoCheckout = async () => {
     if (!buyerName.trim() || !buyerEmail.trim()) {
-      setErrorMessage('Por favor ingresa tu Nombre Legal y Correo Electrónico antes de proceder al pago con Mercado Pago.');
+      const msg = 'Por favor ingresa tu Nombre Legal y Correo Electrónico antes de proceder al pago con Mercado Pago.';
+      setErrorMessage(msg);
+      setMpInitError(msg);
       return;
     }
 
     if (isPremiumTier && (!clientOfferAmount || clientOfferAmount <= 0)) {
-      setErrorMessage('Por favor ingresa un monto de oferta válido.');
+      const msg = 'Por favor ingresa un monto de oferta válido.';
+      setErrorMessage(msg);
+      setMpInitError(msg);
       return;
     }
 
     setIsProcessing(true);
     setErrorMessage(null);
+    setMpInitError(null);
+    setMpCheckoutUrl(null);
 
     try {
       const effectiveArtist = artistName.trim() || buyerName.trim();
@@ -316,7 +326,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         day: 'numeric'
       });
 
-      // 1. Create Preference on Backend
+      console.log('[Mercado Pago] Creando preferencia de pago...', {
+        beatTitle: beat.title,
+        priceARS: finalPriceARS,
+        priceUSD: finalPrice,
+        buyerEmail: buyerEmail.trim(),
+        buyerName: buyerName.trim()
+      });
+
+      // 1. Create Preference on Backend with official SDK
       const prefRes = await fetch('/api/mercadopago/create-preference', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -334,14 +352,18 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         })
       });
 
-      if (!prefRes.ok) {
-        const prefErr = await prefRes.json();
-        throw new Error(prefErr.error || 'Error al generar la preferencia en Mercado Pago.');
-      }
-
       const prefData = await prefRes.json();
 
-      // Persist pending order to localStorage for seamless license delivery upon return from Mercado Pago
+      if (!prefRes.ok || !prefData.init_point) {
+        console.error('[Mercado Pago API Error]:', prefData);
+        const errDetail = prefData.message || prefData.error || 'Error al generar la preferencia en Mercado Pago.';
+        setMpInitError(errDetail);
+        throw new Error(errDetail);
+      }
+
+      console.log('[Mercado Pago] Preferencia creada exitosamente:', prefData);
+
+      // Persist pending order to localStorage for seamless license delivery upon return
       try {
         const pendingData = {
           orderId: prefData.orderId,
@@ -364,103 +386,26 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       }
 
       const redirectUrl = prefData.init_point || prefData.sandbox_init_point;
+      setMpCheckoutUrl(redirectUrl);
 
       // Requirement B: Redirigir al comprador a la URL de Checkout Pro (init_point)
       if (redirectUrl) {
-        window.location.href = redirectUrl;
-        return;
+        try {
+          const pop = window.open(redirectUrl, '_blank');
+          if (!pop || pop.closed || typeof pop.closed === 'undefined') {
+            console.warn('[Mercado Pago] Pop-up bloqueado por el navegador. El botón directo está visible.');
+          }
+        } catch (navErr) {
+          console.warn('[Mercado Pago] Intentando navegación por window.location:', navErr);
+          window.location.href = redirectUrl;
+        }
       }
-
-      // Fallback for simulated/offline mode if no init_point was returned:
-      // 2. Generate contracts
-      const generatedHtml = generateContractHtml({
-        buyerName: buyerName.trim(),
-        buyerEmail: buyerEmail.trim(),
-        artistStageName: effectiveArtist,
-        beatTitle: beat.title,
-        purchaseDate: purchaseDateFormatted,
-        tierKey: selectedTier,
-        tierName: tierInfo.name,
-        amountPaid: finalPrice,
-        transactionId: prefData.orderId || prefData.id,
-        isOfferBased: isPremiumTier,
-        offeredAmount: isPremiumTier ? finalPrice : undefined
-      });
-
-      const generatedTxt = generateContractPlainText({
-        buyerName: buyerName.trim(),
-        buyerEmail: buyerEmail.trim(),
-        artistStageName: effectiveArtist,
-        beatTitle: beat.title,
-        purchaseDate: purchaseDateFormatted,
-        tierKey: selectedTier,
-        tierName: tierInfo.name,
-        amountPaid: finalPrice,
-        transactionId: prefData.orderId || prefData.id
-      });
-
-      // 3. Capture & register license order
-      const captureRes = await fetch('/api/mercadopago/capture', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          preferenceId: prefData.id,
-          orderID: prefData.orderId,
-          beatId: beat.id,
-          beatTitle: beat.title,
-          tierKey: selectedTier,
-          buyerName: buyerName.trim(),
-          buyerEmail: buyerEmail.trim(),
-          artistName: effectiveArtist,
-          amountPaidUSD: finalPrice,
-          amountPaidARS: finalPriceARS,
-          exchangeRateUsed: exchangeRate,
-          contractHtml: generatedHtml,
-          contractText: generatedTxt,
-          customPrice: finalPrice
-        })
-      });
-
-      const captureData = await captureRes.json();
-
-      if (!captureRes.ok || !captureData.success) {
-        throw new Error(captureData.error || 'No se pudo confirmar la transacción de Mercado Pago.');
-      }
-
-      // Store download token & metadata
-      setDownloadToken(captureData.downloadToken);
-      setMaxDownloads(captureData.maxDownloads || 3);
-      setDownloadCount(0);
-
-      const newLicense: PurchasedLicense = captureData.license || {
-        orderId: captureData.orderId,
-        beatTitle: beat.title,
-        beatId: beat.id,
-        producer: PRODUCER_DATA.name,
-        producerEmail: PRODUCER_DATA.email,
-        buyerName: buyerName.trim(),
-        buyerEmail: buyerEmail.trim(),
-        artistStageName: effectiveArtist,
-        tierName: tierInfo.name,
-        tierKey: selectedTier,
-        amountPaid: finalPrice,
-        currency: 'USD',
-        paymentMethod: 'Mercado Pago (Checkout Pro - ARS)',
-        transactionRef: captureData.orderId,
-        purchaseDate: purchaseDateFormatted,
-        contractText: generatedTxt,
-        contractHtml: generatedHtml,
-        isOfferAccepted: isPremiumTier,
-        offeredAmount: isPremiumTier ? finalPrice : undefined
-      };
-
-      setCompletedOrder(newLicense);
-      onPurchaseComplete(newLicense);
-      triggerConfetti();
 
     } catch (err: any) {
-      console.error('Error procesando pago con Mercado Pago:', err);
-      setErrorMessage(err.message || 'Error al procesar el pago con Mercado Pago.');
+      console.error('[Mercado Pago Frontend Error]:', err);
+      const msg = err.message || 'Error al procesar el pago con Mercado Pago.';
+      setErrorMessage(msg);
+      setMpInitError(msg);
     } finally {
       setIsProcessing(false);
     }
@@ -986,26 +931,81 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       </div>
                     </div>
 
-                    {/* Primary Mercado Pago Action */}
-                    <button
-                      id="btn-execute-mercadopago"
-                      onClick={handleMercadoPagoCheckout}
-                      disabled={isProcessing}
-                      className="w-full py-3.5 px-4 rounded-xl font-bold text-sm bg-gradient-to-r from-[#009EE3] to-[#007EB5] hover:from-[#00A9E0] hover:to-[#008CC4] text-white flex items-center justify-center gap-2.5 shadow-lg shadow-sky-600/30 active:scale-98 transition"
-                    >
-                      {isProcessing ? (
-                        <RefreshCw className="w-5 h-5 animate-spin" />
-                      ) : (
-                        <MercadoPagoLogo className="w-5 h-5" />
-                      )}
-                      <span>
-                        {isProcessing 
-                          ? 'Generando checkout de Mercado Pago...' 
-                          : isPremiumTier
-                            ? `Ofertar y Pagar $${finalPriceARS.toLocaleString('es-AR')} ARS con Mercado Pago`
-                            : `Pagar $${finalPriceARS.toLocaleString('es-AR')} ARS con Mercado Pago`}
-                      </span>
-                    </button>
+                    {/* Inline Mercado Pago Error Card if API failed */}
+                    {mpInitError && (
+                      <div className="p-3.5 bg-rose-500/15 border-2 border-rose-500/50 rounded-xl space-y-1.5 text-xs text-rose-200 animate-in fade-in">
+                        <div className="flex items-center gap-2 font-bold text-rose-300">
+                          <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                          <span>Error en Mercado Pago:</span>
+                        </div>
+                        <p className="font-mono text-[11px] bg-black/50 p-2.5 rounded-lg border border-rose-500/30 text-rose-100 break-words">
+                          {mpInitError}
+                        </p>
+                        {buyerEmail.trim().toLowerCase() === paymentConfig.producerEmail?.toLowerCase() && (
+                          <p className="text-[11px] text-amber-300 font-medium pt-1">
+                            💡 Estás usando el mismo correo de tu cuenta de vendedor ({paymentConfig.producerEmail}). Mercado Pago no permite auto-pagos en modo producción. Ingresa un email de comprador diferente para probar.
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Direct Mercado Pago Button if Link was Generated */}
+                    {mpCheckoutUrl ? (
+                      <div className="p-4 bg-gradient-to-br from-[#009EE3]/25 via-[#005E8A]/15 to-transparent border-2 border-[#009EE3] rounded-2xl text-center space-y-3 shadow-[0_0_30px_rgba(0,158,227,0.35)] animate-in zoom-in-95">
+                        <div className="flex items-center justify-center gap-2 text-emerald-400 font-bold text-sm">
+                          <CheckCircle className="w-5 h-5 text-emerald-400" />
+                          <span>¡Enlace Oficial de Mercado Pago Listo!</span>
+                        </div>
+                        <p className="text-xs text-sky-100">
+                          Haz clic en el botón para abrir la pasarela de pago seguro de Mercado Pago:
+                        </p>
+                        <a
+                          id="btn-mp-open-direct"
+                          href={mpCheckoutUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full py-3.5 px-4 rounded-xl font-black text-sm bg-gradient-to-r from-[#009EE3] to-[#007EB5] hover:from-[#00A9E0] hover:to-[#008CC4] text-white flex items-center justify-center gap-2.5 shadow-xl shadow-[#009EE3]/40 active:scale-98 transition"
+                        >
+                          <MercadoPagoLogo className="w-5 h-5" />
+                          <span>Pagar ${finalPriceARS.toLocaleString('es-AR')} ARS en Mercado Pago</span>
+                          <ExternalLink className="w-4 h-4 ml-1" />
+                        </a>
+                        <div className="flex items-center justify-between text-[10px] text-sky-300/70 pt-1">
+                          <span>Ventana externa segura</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMpCheckoutUrl(null);
+                              setMpInitError(null);
+                            }}
+                            className="text-sky-400 hover:underline"
+                          >
+                            Generar otro enlace
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Primary Mercado Pago Action */
+                      <button
+                        id="btn-execute-mercadopago"
+                        onClick={handleMercadoPagoCheckout}
+                        disabled={isProcessing}
+                        className="w-full py-3.5 px-4 rounded-xl font-bold text-sm bg-gradient-to-r from-[#009EE3] to-[#007EB5] hover:from-[#00A9E0] hover:to-[#008CC4] text-white flex items-center justify-center gap-2.5 shadow-lg shadow-sky-600/30 active:scale-98 transition disabled:opacity-60"
+                      >
+                        {isProcessing ? (
+                          <RefreshCw className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <MercadoPagoLogo className="w-5 h-5" />
+                        )}
+                        <span>
+                          {isProcessing 
+                            ? 'Generando checkout de Mercado Pago...' 
+                            : isPremiumTier
+                              ? `Ofertar y Pagar $${finalPriceARS.toLocaleString('es-AR')} ARS con Mercado Pago`
+                              : `Pagar $${finalPriceARS.toLocaleString('es-AR')} ARS con Mercado Pago`}
+                        </span>
+                      </button>
+                    )}
 
                     <div className="flex items-center justify-between text-[11px] text-sky-300/60 pt-1">
                       <span className="flex items-center gap-1">

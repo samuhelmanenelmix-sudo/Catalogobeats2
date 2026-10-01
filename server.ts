@@ -1324,7 +1324,16 @@ app.post('/api/mercadopago/create-preference', async (req, res) => {
       : (process.env.MERCADOPAGO_ACCESS_TOKEN || DEFAULT_MP_ACCESS_TOKEN).trim();
 
     const orderId = `MP-ORD-${Date.now().toString(36).toUpperCase()}-${uuidv4().substring(0, 4).toUpperCase()}`;
-    const origin = req.headers.origin || `http://localhost:${PORT}`;
+    const publicAppUrl = (process.env.APP_URL || 'https://ais-dev-7wf5gcm64lk3chga6h7gpb-670428714730.us-east1.run.app').trim();
+    let origin = (req.headers.origin || publicAppUrl).trim();
+
+    // Mercado Pago requires public HTTPS domain for back_urls when auto_return is enabled
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      if (publicAppUrl && publicAppUrl.startsWith('https://')) {
+        origin = publicAppUrl;
+      }
+    }
+    const isHttpsOrigin = origin.startsWith('https://');
 
     // Initialize Official Mercado Pago SDK Client
     const mpClient = new MercadoPagoConfig({
@@ -1334,7 +1343,7 @@ app.post('/api/mercadopago/create-preference', async (req, res) => {
     const preference = new Preference(mpClient);
 
     const displayTitle = (beatTitle || beat.title || 'Beat Instrumental').trim();
-    const preferencePayload = {
+    const preferencePayload: any = {
       body: {
         items: [
           {
@@ -1356,7 +1365,6 @@ app.post('/api/mercadopago/create-preference', async (req, res) => {
           failure: `${origin}/?collection_status=failure&order_id=${orderId}&beat_id=${beat.id}&tier=${tierKey}`,
           pending: `${origin}/?collection_status=pending&order_id=${orderId}&beat_id=${beat.id}&tier=${tierKey}`
         },
-        auto_return: 'approved',
         statement_descriptor: 'SAMU HELMAN',
         external_reference: orderId,
         metadata: {
@@ -1373,7 +1381,11 @@ app.post('/api/mercadopago/create-preference', async (req, res) => {
       }
     };
 
-    console.log(`[Mercado Pago SDK] Generando Checkout Pro para "${displayTitle}" - Monto: $${effectivePriceARS} ARS (USD $${priceUSD})...`);
+    if (isHttpsOrigin) {
+      preferencePayload.body.auto_return = 'approved';
+    }
+
+    console.log(`[Mercado Pago SDK] Creando preferencia para "${displayTitle}" - Monto: $${effectivePriceARS} ARS (USD $${priceUSD}) - Origin: ${origin}...`);
     const prefData = await preference.create(preferencePayload as any);
 
     return res.status(201).json({
@@ -1388,10 +1400,27 @@ app.post('/api/mercadopago/create-preference', async (req, res) => {
     });
 
   } catch (error: any) {
-    console.error('Error in /api/mercadopago/create-preference:', error);
+    console.error('Error detallado en /api/mercadopago/create-preference:', {
+      message: error?.message,
+      cause: error?.cause,
+      status: error?.status,
+      apiResponse: error?.apiResponse?.body
+    });
+    
+    let userMsg = error?.message || 'Error al comunicarse con Mercado Pago';
+    if (error?.apiResponse?.body?.message) {
+      userMsg = error.apiResponse.body.message;
+    } else if (Array.isArray(error?.cause) && error.cause[0]?.description) {
+      userMsg = error.cause[0].description;
+    } else if (typeof error?.cause === 'string') {
+      userMsg = error.cause;
+    }
+
     return res.status(500).json({
-      error: 'Error al generar la preferencia con la SDK oficial de Mercado Pago',
-      message: error.message || error.toString()
+      error: 'Error al generar la preferencia con Mercado Pago',
+      message: String(userMsg),
+      status: error?.status || 500,
+      details: error?.apiResponse?.body || error?.cause || null
     });
   }
 });
